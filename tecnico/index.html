@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>HOPE | Portal do técnico</title>
+<style>
+:root{font-family:system-ui,Arial,sans-serif;color-scheme:dark;--b:#091623;--s:#14283a;--border:#345064;--accent:#78ebc8;--muted:#aac0d2}*{box-sizing:border-box}
+body{margin:0;color:#f3f7fa;background:radial-gradient(ellipse at 95% 0%,#145047 0%,transparent 35%),var(--b)}
+main{max-width:1024px;margin:0 auto;padding:28px 16px 70px}header,.between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header{margin-bottom:24px}.brand{color:var(--accent);font-size:12px;font-weight:900;letter-spacing:3px}h1{margin:4px 0;font-size:30px;letter-spacing:-1px}h2{font-size:19px;margin:0 0 12px}p{color:var(--muted);line-height:1.5}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.card{border-radius:14px;background:var(--s);border:1px solid var(--border);padding:22px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.fields{display:grid;gap:12px}.field{font-size:13px;color:#c6dae6;font-weight:650;display:grid;gap:7px}
+input,select,textarea{width:100%;border:1px solid #526e80;border-radius:9px;background:#091c2c;color:#fff;padding:12px;font:inherit}textarea{min-height:72px;resize:vertical}
+button{font:inherit;font-weight:720;color:#113a32;background:var(--accent);padding:11px 18px;border:0;border-radius:9px;cursor:pointer}button.secondary{color:#e7f8fa;background:#2a475c}button:disabled{opacity:.45;cursor:default}
+.hidden{display:none!important}.meta{font-size:12px;color:var(--muted)}.toast{padding:13px 16px;border:1px solid #4d917f;border-radius:10px;background:#153c39;margin-bottom:16px;white-space:pre-wrap}
+.toast.error{border-color:#a56961;background:#47262b}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.stat{border:1px solid #395368;background:#102d3d;border-radius:12px;padding:16px}.stat strong{font-size:27px;display:block;color:var(--accent)}.stat span{font-size:12px;color:#bed6e1}
+.scroll{overflow-x:auto;border:1px solid #38566a;border-radius:11px}table{border-collapse:collapse;min-width:510px;width:100%}td,th{padding:11px;border-bottom:1px solid #365368;font-size:12px;text-align:left}th{background:#214054;color:#d6e3eb}
+.item{border-bottom:1px solid #365368;padding:14px 0}.item:last-child{border:0}.item p{margin:6px 0}small{color:#b7c8d3}
+@media(max-width:660px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}h1{font-size:25px}}
+</style>
+</head>
+<body><main>
+<header><div><div class="brand">HOPE / PROCISA WMS</div><h1>Portal do técnico</h1><div class="meta">Campo Grande · Consulta de carga e pedidos antecipados</div></div><div class="between"><a href="../">Painel administrativo</a><button id="logout" class="secondary hidden">Sair</button></div></header>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<section id="login" class="card" style="max-width:540px;margin-left:auto;margin-right:auto">
+<h2>Entrar</h2><p>Entre com seu e-mail e senha do HOPE. Para ter acesso à carga, seu cadastro precisa ser aprovado pelo almoxarifado.</p>
+<div class="fields"><label class="field">E-mail<input type="email" id="email" autocomplete="username"></label><label class="field">Senha<input type="password" id="password" autocomplete="current-password" minlength="8"></label><div class="between"><button id="signin">Entrar</button><button class="secondary" id="signup">Criar conta</button></div></div>
+<p class="meta">Ao criar a conta, confirme seu e-mail caso o Supabase solicite. Você poderá pedir acesso depois de entrar.</p>
+</section>
+<section id="pending" class="card hidden"><h2>Solicitar vínculo com técnico</h2><p id="pendingNote">Informe seu login Z do Conect. O administrador precisa conferir sua identidade antes de liberar o acesso.</p><div class="grid"><label class="field">Login Z <input id="loginZ" maxlength="40" placeholder="Z502781"></label><div class="between" style="align-items:end"><button id="requestAccess">Solicitar acesso</button><button id="checkAccess" class="secondary">Verificar aprovação</button></div></div><p class="meta">Seu login Z não é sua senha e, sozinho, não libera acesso aos dados.</p></section>
+<section id="tech" class="hidden"><div class="card"><h2 id="welcome">Minha carga atual</h2><p>Fotografia da posição no Conect; não equivale a conferência física do estoque.</p><div class="stats"><div class="stat"><strong id="fieldCount">—</strong><span>Comigo</span></div><div class="stat"><strong id="pendingCount">—</strong><span>Aguardando confirmação</span></div><div class="stat"><strong id="orderCount">—</strong><span>Pedidos recentes</span></div></div><div class="scroll"><table><thead><tr><th>Número de série</th><th>Material</th><th>Situação</th></tr></thead><tbody id="inventory"></tbody></table></div></div>
+<div class="grid"><section class="card"><h2>Solicitar material</h2><div class="fields"><label class="field">Material<select id="material"></select></label><label class="field">Quantidade<input id="quantity" type="number" min="1" max="100" value="1"></label><label class="field">Planejamento<select id="days"><option value="2">2 dias</option><option value="3">3 dias</option></select></label><label class="field">Observação (opcional)<textarea id="notes" maxlength="300"></textarea></label><button id="orderButton">Registrar pedido</button></div><p class="meta">Registrar pedido não baixa estoque. A entrega precisa ser confirmada pelo almoxarifado.</p></section><section class="card"><div class="between"><h2>Meus pedidos</h2><button id="reload" class="secondary">Atualizar</button></div><div id="orders"></div></section></div></section>
+<section id="admin" class="hidden"><div class="card"><div class="between"><h2>Autorizações de técnicos</h2><button id="adminReload" class="secondary">Atualizar</button></div><p>Antes de aprovar, confirme a identidade do solicitante e se o login Z informado realmente pertence a ele.</p><div id="requests"></div></div><div class="card"><h2>Pedidos recebidos</h2><p>Marcar pronto não equivale a entregar materiais. Faça a conferência física separadamente.</p><div id="received"></div></div></section>
+</main><script>
+'use strict';
+const URLBASE='https://swqfeufeqgwqtthdnttm.supabase.co';
+const KEY='sb_publishable_p8ukmoThOyDpR6XL_YjhlQ_JRMjhGlH';
+const STORE='hope_portal_tecnico_session_v2';
+const el=id=>document.getElementById(id);
+let sess=null,user=null,profile=null;
+const visible=(id,yes)=>el(id).classList.toggle('hidden',!yes);
+function notice(message,error=false){const d=el('toast');d.className=error?'toast error':'toast';d.textContent=String(message);visible('toast',true)}
+function dismiss(){visible('toast',false)}
+function save(){try{sess?localStorage.setItem(STORE,JSON.stringify(sess)):localStorage.removeItem(STORE)}catch{}}
+function remember(d){sess={access_token:d.access_token,refresh_token:d.refresh_token,expires_at:Date.now()+Number(d.expires_in||3600)*1000};save()}
+async function refresh(){if(!sess||!sess.refresh_token)throw Error('Faça login.');if(Date.now()<sess.expires_at-60000)return;const d=await api('/auth/v1/token?grant_type=refresh_token','POST',{refresh_token:sess.refresh_token},false);remember(d)}
+async function api(path,method='GET',body,auth=true){if(auth)await refresh();const headers={apikey:KEY,Accept:'application/json'};if(auth)headers.Authorization='Bearer '+sess.access_token;if(body!==undefined)headers['Content-Type']='application/json';const res=await fetch(URLBASE+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});let data;const t=await res.text();try{data=JSON.parse(t)}catch{data=t}if(!res.ok)throw Error(data?.msg||data?.message||data?.error_description||data?.error||'HTTP '+res.status);return data}
+function txt(tag,s){const e=document.createElement(tag);e.textContent=String(s??'');return e}
+function row(parent,values){const tr=txt('tr','');for(const v of values)tr.append(txt('td',v));parent.append(tr)}
+async function boot(){dismiss();user=await api('/auth/v1/user');const ps=await api('/rest/v1/usuarios_wms?select=papel,tecnico_id,ativo');profile=(ps||[]).find(p=>p.ativo);visible('login',false);visible('logout',true);for(const id of ['pending','tech','admin'])visible(id,false);
+ if(profile?.papel==='admin'){visible('admin',true);await loadAdmin();return}
+ if(profile?.papel==='tecnico'&&profile.tecnico_id){visible('tech',true);await loadTech();return}
+ visible('pending',true);const rs=await api('/rest/v1/wms_solicitacoes_acesso?select=login_conect,status');const r=rs?.[0];if(r){el('pendingNote').textContent='Sua solicitação para '+r.login_conect+' está '+r.status+'. Solicite ao almoxarifado que confira e aprove sua conta.';el('loginZ').value=r.login_conect;el('loginZ').disabled=true;visible('requestAccess',false)}else{el('pendingNote').textContent='Informe seu login Z do Conect. A aprovação exige conferência de identidade pelo administrador.';el('loginZ').disabled=false;visible('requestAccess',true)}
+}
+async function loadTech(){const [people,positions,materials,orders]=await Promise.all([
+api('/rest/v1/tecnicos?select=nome,login_conect&id=eq.'+profile.tecnico_id),
+api('/rest/v1/conect_posicoes?select=numero_serie,codigo_sap,situacao&limit=2000'),
+api('/rest/v1/materiais?select=id,codigo_sap,descricao&order=descricao.asc'),
+api('/rest/v1/requisicoes?select=id,status,criado_em,periodo_dias&order=criado_em.desc&limit=30')]);
+const name=people?.[0]?.nome||'Técnico';el('welcome').textContent='Minha carga · '+name;
+const formats=new Map(materials.map(x=>[String(x.codigo_sap).replace(/^0+(?=\d)/,''),x.descricao]));const active=positions.filter(x=>x.situacao==='com_tecnico');const waiting=positions.filter(x=>x.situacao==='confirmacao');el('fieldCount').textContent=active.length;el('pendingCount').textContent=waiting.length;el('orderCount').textContent=orders.length;
+const tbody=el('inventory');tbody.replaceChildren();for(const p of [...active,...waiting].slice(0,600))row(tbody,[p.numero_serie,formats.get(String(p.codigo_sap).replace(/^0+(?=\d)/,''))||p.codigo_sap,p.situacao==='confirmacao'?'Aguardando confirmação':'Com técnico']);if(!tbody.children.length)row(tbody,['Nenhum equipamento registrado','','']);
+const select=el('material');select.replaceChildren();for(const m of materials.filter(x=>x.codigo_sap!=='TESTE001')){const op=txt('option',m.descricao+' · '+m.codigo_sap);op.value=m.id;select.append(op)}
+const o=el('orders');o.replaceChildren();if(!orders.length)o.append(txt('p','Nenhum pedido cadastrado.'));for(const p of orders){const d=txt('div','#'+p.id+' · '+p.status+' · '+new Date(p.criado_em).toLocaleDateString('pt-BR'));d.className='item';o.append(d)}
+}
+async function loadAdmin(){const [requests,orders,techs,items,materials]=await Promise.all([
+api('/rest/v1/wms_solicitacoes_acesso?select=usuario_id,email_contato,login_conect,status&status=eq.pendente&order=solicitado_em.asc'),
+api('/rest/v1/requisicoes?select=id,tecnico_id,status,observacao,criado_em&order=criado_em.desc&limit=50'),
+api('/rest/v1/tecnicos?select=id,nome,login_conect'),api('/rest/v1/itens_requisicao?select=requisicao_id,material_id,quantidade_solicitada&limit=250'),
+api('/rest/v1/materiais?select=id,descricao')]);
+const req=el('requests');req.replaceChildren();if(!requests.length)req.append(txt('p','Nenhuma solicitação pendente.'));
+for(const p of requests){const d=txt('div','');d.className='item';d.append(txt('strong',p.login_conect),txt('p',p.email_contato));const b=txt('button','Aprovar após conferência');b.onclick=async()=>{b.disabled=true;try{await api('/rest/v1/rpc/wms_aprovar_solicitacao','POST',{p_usuario_id:p.usuario_id});notice('Conta aprovada para login '+p.login_conect);await loadAdmin()}catch(e){notice(e.message,true)}finally{b.disabled=false}};d.append(b);req.append(d)}
+const techMap=new Map(techs.map(x=>[String(x.id),x.nome]));const materialMap=new Map(materials.map(x=>[String(x.id),x.descricao]));const box=el('received');box.replaceChildren();if(!orders.length)box.append(txt('p','Nenhum pedido cadastrado.'));
+for(const p of orders){const d=txt('div','');d.className='item';d.append(txt('strong','#'+p.id+' · '+(techMap.get(String(p.tecnico_id))||'Técnico')+' · '+p.status));for(const item of items.filter(x=>x.requisicao_id===p.id))d.append(txt('p',item.quantidade_solicitada+' × '+(materialMap.get(String(item.material_id))||'Material')));if(p.observacao)d.append(txt('p',p.observacao));if(['pendente','em_separacao'].includes(p.status)){const b=txt('button',p.status==='pendente'?'Iniciar separação':'Marcar pronto');b.className='secondary';b.onclick=async()=>{b.disabled=true;try{await api('/rest/v1/requisicoes?id=eq.'+p.id,'PATCH',{status:p.status==='pendente'?'em_separacao':'pronto'});await loadAdmin();notice('Pedido atualizado')}catch(e){notice(e.message,true)}finally{b.disabled=false}};d.append(b)}box.append(d)}
+}
+el('signin').onclick=async()=>{const b=el('signin');b.disabled=true;try{const d=await api('/auth/v1/token?grant_type=password','POST',{email:el('email').value.trim(),password:el('password').value},false);remember(d);el('password').value='';await boot()}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('signup').onclick=async()=>{const b=el('signup');b.disabled=true;try{const email=el('email').value.trim(),password=el('password').value;if(!email||password.length<8)throw Error('Informe e-mail e senha com pelo menos 8 caracteres.');const d=await api('/auth/v1/signup','POST',{email,password},false);if(d?.access_token){remember(d);await boot()}else notice('Conta solicitada. Confira a caixa de entrada e confirme seu e-mail, caso receba a confirmação. Depois entre aqui.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('password').addEventListener('keydown',e=>{if(e.key==='Enter')el('signin').click()});
+el('requestAccess').onclick=async()=>{const z=el('loginZ').value.trim().toUpperCase();if(!/^Z[0-9A-Z]{4,20}$/.test(z))return notice('Login Z inválido.',true);const b=el('requestAccess');b.disabled=true;try{await api('/rest/v1/wms_solicitacoes_acesso','POST',{usuario_id:user.id,email_contato:user.email,login_conect:z,status:'pendente'});await boot();notice('Pedido de acesso enviado; aguarde a conferência do almoxarifado.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('checkAccess').onclick=()=>boot().then(()=>notice('Situação consultada.')).catch(e=>notice(e.message,true));
+el('orderButton').onclick=async()=>{const b=el('orderButton');b.disabled=true;try{const n=await api('/rest/v1/rpc/wms_solicitar_material','POST',{p_material_id:Number(el('material').value),p_quantidade:Number(el('quantity').value),p_periodo:Number(el('days').value),p_observacao:el('notes').value});el('notes').value='';await loadTech();notice('Pedido #'+n+' registrado com sucesso.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('reload').onclick=()=>loadTech().then(()=>notice('Dados atualizados.')).catch(e=>notice(e.message,true));
+el('adminReload').onclick=()=>loadAdmin().then(()=>notice('Dados atualizados.')).catch(e=>notice(e.message,true));
+el('logout').onclick=async()=>{try{await api('/auth/v1/logout','POST',{})}catch{}sess=null;user=null;profile=null;save();['pending','tech','admin','logout'].forEach(x=>visible(x,false));visible('login',true);dismiss()};
+(async()=>{try{sess=JSON.parse(localStorage.getItem(STORE)||'null');if(sess)await boot()}catch(e){sess=null;save();visible('login',true);notice('Sua sessão precisa ser renovada. Entre novamente.',true)}})();
+</script></body></html>
