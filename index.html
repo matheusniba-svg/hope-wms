@@ -159,7 +159,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </nav>
   <div class="s-spacer"></div>
   <div class="s-foot"><div class="s-foot-icon">✓</div><div><strong>Fonte protegida</strong><small>Dados consultados no HOPE<br>Somente administrador</small></div></div>
-  <p class="s-version">v18 · Centro de comando</p>
+  <p class="s-version">v18.1 · Centro de comando</p>
 </aside><main class="wms-workspace">
 <header><div class="brand"><div class="logo">W</div><div><strong>Procisa WMS</strong><small>Campo Grande · Mato Grosso do Sul</small></div></div><div class="status" id="connectionStatus"><i class="dot"></i><span id="statusText">Não conectado</span></div></header>
 <div class="topline"><div><h1 id="wmsPageTitle">Sua operação, em uma só tela.</h1><p class="lead" id="wmsPageSubtitle">Estoque, técnicos e reposição com uma visão simples e confiável.</p><span class="tag">Matriz 06/11 · Conect 09/11 · NAtlas até 09/11 — fotografias históricas</span></div><a href="./tecnico/" class="btn-ghost mini" style="text-decoration:none">Portal dos técnicos e pedidos</a><button id="showSetup" class="btn-ghost mini hidden" type="button">Sair da conta</button></div>
@@ -265,7 +265,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 </section>
 
 <section class="panel" id="wmsBatchPanel" aria-labelledby="wmsBatchTitle">
- <div class="section-top"><div><h2 id="wmsBatchTitle">Atualização do dia · HOPE</h2><p class="section-note">Um envio de arquivos, uma conferência e uma confirmação para o Conect e o NAtlas.</p></div><span class="status-chip warning">Somente administrador</span></div>
+ <div class="section-top"><div><h2 id="wmsBatchTitle">Atualização do dia · HOPE v18.1</h2><p class="section-note">Um envio de arquivos, uma conferência e uma confirmação para o Conect e o NAtlas. Leitor NAtlas corrigido para células vazias e datas Excel.</p></div><span class="status-chip warning">Somente administrador</span></div>
  <div class="import-drop">
   <label for="wmsBatchFiles"><strong>1. Selecione todas as planilhas do dia de uma vez</strong></label>
   <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Escolher relatórios do dia" />
@@ -1626,7 +1626,7 @@ function dailyParseRows(rows){
   if(!serial||serial.length>100||/^[0-9]+([,.][0-9]+E[+-]?[0-9]+|E[+-][0-9]+)$/i.test(serial)||!sap||!local||!tipo_local)throw new Error('Identificador ou localização inválidos na linha '+r.line+'. Exporte seriais como texto.');
   if(seen.has(serial))throw new Error('Serial duplicado na linha '+r.line+': '+serial);seen.add(serial);
   const data_instalacao=wmsExcelInstalacao(get('Data da Alteração'));
-  if(local==='ASSINANTE'&&tipo_local==='ASSINANTE'&&!data_instalacao)throw new Error('Data da instalação inválida na coluna P, linha '+r.line+'.');
+  if(local==='ASSINANTE'&&tipo_local==='ASSINANTE'&&!data_instalacao)throw new Error('Data da instalação inválida na coluna P, linha '+r.line+' (valor lido: '+JSON.stringify(get('Data da Alteração'))+'). A planilha original não será alterada.');
   out.push({serial,sap,local,tipo_local,contrato:get('Contrato NETSMS'),data_instalacao});
  }
  if(!out.length)throw new Error('Relatório sem registros.');return out;
