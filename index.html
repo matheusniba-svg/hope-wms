@@ -1437,7 +1437,7 @@ function opsLine(label,value){const row=document.createElement('div');row.classN
 let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null;
 async function wmsD1Load(){
  try{
-  const rows=await apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,observacao',{order:'referencia.desc'});
+  const rows=await apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,atlas_procisa_total,atlas_sem_conect_total,atlas_procisa_sap,atlas_sem_conect_sap,observacao',{order:'referencia.desc'});
   wmsD1Snapshot=rows[0]||null;
   wmsSupplyRenderStatus();renderOperations();
   if($('wmsGeneralModal').open)wmsGeneralRender();
@@ -1588,7 +1588,7 @@ function wmsSupplyRenderStatus(){
  $('wmsSupplyStatus').textContent='Conect: '+ref+' · '+
   (snapshot?'Consumo D-1 '+snapshot.dia_consumo.split('-').reverse().join('/')+': '+pt(snapshot.instalacoes_total)+' instalações conferidas em dois NAtlas. ':'Consumo D-1: aguardando conferência. ')+
   (snapshot?'NNE: '+pt(snapshot.nne_eter_em_transito??0)+' equipamentos e '+pt(snapshot.nne_emis_em_transito??0)+' insumos em trânsito. ':'')+
-  (atlas?'Atlas Procisa: '+pt(atlasCount)+' seriais, prévia. ':'')+
+  (atlas?'Atlas Procisa: '+pt(atlasCount)+' seriais, prévia. ':snapshot?.atlas_procisa_total!=null?'Atlas Procisa: '+pt(snapshot.atlas_procisa_total)+' serial(is); '+pt(snapshot.atlas_sem_conect_total)+' a conferir no Conect. ':'')+
   (plan?'Planejamento selecionado: '+pt(planEquip.length)+' linha(s) de equipamento e '+pt(planInsumos.length)+' de insumo; não soma no estoque. ':'')+
   'Nenhum material é marcado como entregue automaticamente.';
 }
@@ -1635,7 +1635,7 @@ function renderOperations(){
  $('opsLimit').textContent=hasData?'Quantidades informadas pelo Conect, não uma contagem física.':'Selecione os arquivos em Atualizações para ver o estoque.';
  const reference=opsReference||null;
  const d1=wmsSupplyD1Counts(reference),atlas=wmsAtlasFull,plan=wmsSupplyPlan;
- const recent=atlas&&reference?atlas.rows.filter(x=>x.date===reference):[];
+ const recent=atlas?.rows||[];
  const knownSerials=new Set(opsPositions.map(x=>cleanSerial(x.numero_serie)));
  const pendingByModel=new Map();
  for(const x of recent){
@@ -1644,8 +1644,16 @@ function renderOperations(){
   if(!pendingByModel.has(model))pendingByModel.set(model,[]);
   pendingByModel.get(model).push(x);
  }
- const atlasByModel=new Map(),planByModel=new Map();
+ const atlasByModel=new Map(),planByModel=new Map(),pendingCountByModel=new Map();
  if(atlas)for(const x of atlas.rows){const name=nomeModeloSap(x.sap);atlasByModel.set(name,(atlasByModel.get(name)||0)+1);}
+ else if(wmsD1Snapshot?.referencia===reference){
+  for(const [sap,n] of Object.entries(wmsD1Snapshot.atlas_procisa_sap||{})){
+   const name=nomeModeloSap(sap);atlasByModel.set(name,(atlasByModel.get(name)||0)+Number(n||0));
+  }
+  for(const [sap,n] of Object.entries(wmsD1Snapshot.atlas_sem_conect_sap||{})){
+   const name=nomeModeloSap(sap);pendingCountByModel.set(name,(pendingCountByModel.get(name)||0)+Number(n||0));
+  }
+ }
  if(plan)for(const x of plan.rows){if(x.category!=='equipamento')continue;const name=nomeModeloSap(x.sap);planByModel.set(name,(planByModel.get(name)||0)+x.qty);}
  const union=new Map([...codeGroups].map(([k,g])=>[k,{...g}]));
  for(const model of [...atlasByModel.keys(),...planByModel.keys()]){
@@ -1658,27 +1666,29 @@ function renderOperations(){
  const body=$('opsRows');body.replaceChildren();
  for(const g of list){
   const installs=d1?.get(g.code),pending=pendingByModel.get(g.code)||[],planned=planByModel.get(g.code);
+  const pendingCount=atlas?pending.length:pendingCountByModel.get(g.code);
   const days=installs>0?g.no_estoque/installs:null;
   const atlasCount=atlasByModel.get(g.code);
   const tr=document.createElement('tr');
   const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[d1===null?'—':pt(installs||0),'num'],
    [days===null?'—':decimal(days)+' d','num'],
-   [plan===null?(wmsD1Snapshot?.referencia===reference?pt(wmsD1Snapshot.nne_eter_em_transito??0):'—'):pt(planned||0),'num'],[atlas===null?'—':pt(atlasCount||0),'num'],
-   [atlas===null||!reference?'—':pt(pending.length),'num']];
+   [plan===null?(wmsD1Snapshot?.referencia===reference?pt(wmsD1Snapshot.nne_eter_em_transito??0):'—'):pt(planned||0),'num'],
+   [atlasCount==null?'—':pt(atlasCount),'num'],
+   [pendingCount==null?'—':pt(pendingCount),'num']];
   const detail=document.createElement('tr');detail.className='wms-stock-extra';detail.hidden=true;
   const extra=document.createElement('td');extra.colSpan=7;
   const note=document.createElement('div');note.className='wms-stock-extra-content';
   const tips=[
    'Com técnicos: '+pt(g.com_tecnico)+' · Aguardando aceite: '+pt(g.confirmacao)+
       ' · Total no Conect: '+pt(g.total),
-   'Atlas Procisa: '+(atlas===null?'não enviado':pt(atlasCount||0)+' seriais INICIALIZADOS'),
-   'Inicializados na data '+(reference||'sem referência')+' sem correspondente no Conect: '+(atlas===null?'não conferido':pt(pending.length)),
-   'Planejamento não entregue: '+(plan===null?'não enviado':pt(planned||0)+' unidades'),
-   pending.length&&planned?'ATENÇÃO: há quantidade possivelmente compatível com o planejamento, mas precisamos de NF, reserva ou confirmação de recebimento para vincular a carga.':'Correspondência por SAP e quantidade não comprova entrega.'
+   'Atlas Procisa: '+(atlasCount==null?'não conferido':pt(atlasCount)+' seriais INICIALIZADOS'),
+   'Seriais no Atlas sem correspondência no Conect: '+(pendingCount==null?'não conferido':pt(pendingCount)),
+   'Equipamentos previstos em trânsito: '+(plan===null?(wmsD1Snapshot?.referencia===reference?pt(wmsD1Snapshot.nne_eter_em_transito??0):'não conferido'):pt(planned||0)),
+   pendingCount>0&&planned>0?'ATENÇÃO: há itens nos dois relatórios, mas para associá-los é necessário conferir SAP, quantidade, NF e reserva.':'O saldo Atlas é de localização, não uma dívida comprovada nem material já recebido.'
   ];
   for(const line of tips){const x=document.createElement('p');x.textContent=line;note.append(x);}
   if(pending.length){
-   const link=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Ver seriais novos sem registro no Conect ('+pending.length+')';
+   const link=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Ver seriais do Atlas sem registro no Conect ('+pending.length+')';
    link.append(summary);const listEl=document.createElement('div');listEl.className='wms-serial-preview';
    listEl.textContent=pending.slice(0,50).map(x=>x.serial+' · SAP '+x.sap).join('   |   ')+(pending.length>50?' · mais '+(pending.length-50)+' seriais':'');
    link.append(listEl);note.append(link);
@@ -1702,7 +1712,7 @@ function renderOperations(){
  }
  if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
  $('opsFooter').textContent='Conect '+(reference||'sem data')+' · Consumo do dia anterior'+(d1===null?' ainda não confirmado.':'.')+
-  ' · Em trânsito vem do planejamento e não é somado ao estoque. Valores a conferir não são dívida comprovada.';
+  ' · Consumo D-1 refere-se a '+(reference?wmsDateOffset(reference,-1):'dia anterior')+'; o estoque e o Atlas são fotografias de posição. “A conferir” não significa dívida comprovada.';
  renderOpsSerialDetails(null);renderOpsRankings();renderOpsKitSelectors();
 }
 function renderOpsSerialDetails(code){
