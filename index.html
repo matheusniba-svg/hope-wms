@@ -196,6 +196,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-model-daygrid span{display:inline-block;border:1px solid #33576a;border-radius:8px;padding:5px 9px;background:#18384a;font-size:10px}
 .wms-model-footnote{font-size:11px;line-height:1.6;color:#91b2c3;margin:12px 0}
 @media(max-width:640px){.wms-model-title{display:block}.wms-model-count{display:inline-block;margin-top:10px}.wms-model-filters{display:block}.wms-model-filters label{margin-bottom:10px}}
+.wms-date-auto{display:block;border:1px solid #365769;border-radius:10px;background:#0b1b2c;color:#77eac6;padding:12px 13px;font-size:15px;font-weight:780;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body class="wms-locked">
@@ -336,7 +337,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <div class="wms-batch-tile"><small>Abastecimento NNE</small><strong id="wmsBatchNneStat">Opcional</strong><span id="wmsBatchNneDetail">Sem arquivo</span></div>
  </div>
  <div class="form-grid" style="margin-top:15px">
-   <label class="field">2. Data da fotografia <input id="wmsBatchDateInput" type="date" aria-label="Data da fotografia Conect e NAtlas"></label>
+   <div class="field"><span>2. Data da fotografia (automática)</span><output id="wmsBatchDatePreview" class="wms-date-auto" aria-live="polite">Selecione os arquivos</output><input id="wmsBatchDateInput" type="hidden" value=""><small>O HOPE usa a data dos arquivos Conect e NAtlas. Para importar outro dia, selecione os relatórios daquela data.</small></div>
    <label class="field" style="justify-content:center"><span>Conferência de integridade</span><span class="wms-batch-check"><input id="wmsBatchComplete" type="checkbox" /> Confirmo que o NAtlas é completo e corresponde à data indicada.</span></label>
  </div>
  <div id="wmsBatchStatus" class="import-status" role="status" aria-live="polite" style="white-space:pre-line">Selecione os relatórios. Nenhum dado será alterado antes da confirmação.</div>
@@ -1813,6 +1814,7 @@ function wmsBatchRefresh(){
  $('wmsBatchNneStat').textContent=!sel.nne?'Opcional':n?'NNE conferido':'Conferindo...';
  $('wmsBatchNneDetail').textContent=n?pt(n.stats.units)+' terminais ETER em trânsito':sel.nne?$('wmsNneMsg').textContent.slice(0,130):'Abastecimento independente';
  const date=$('wmsBatchDateInput').value;
+ $('wmsBatchDatePreview').textContent=/^\d{4}-\d{2}-\d{2}$/.test(date)?date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Aguardando arquivos com a mesma data';
  const dated=sel.diario?wmsBatchDate(sel.diario.name):null;
  const unmatched=dated&&date&&dated!==date;
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
@@ -1838,8 +1840,7 @@ $('wmsBatchFiles').addEventListener('change',e=>{
  const days=[...sel.conect.values(),...(sel.diario?[sel.diario]:[])].map(f=>wmsBatchDate(f.name)).filter(Boolean);
  const unique=[...new Set(days)];
  if(unique.length>1)sel.warnings.push('Conect e NAtlas apresentam datas diferentes: '+unique.join(', '));
- if(unique.length===1)$('wmsBatchDateInput').value=unique[0];
- else if(!files.length)$('wmsBatchDateInput').value='';
+ $('wmsBatchDateInput').value=unique.length===1?unique[0]:'';
  const nneDate=sel.nne?wmsBatchNneDate(sel.nne.name):null;
  if(nneDate)$('wmsNneDate').value=nneDate;
  if(sel.conect.size){wmsBatchAssign('conectFiles',[...sel.conect.values()]);}
