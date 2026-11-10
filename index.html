@@ -149,7 +149,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 #wmsStockDetails[hidden]{display:none!important}
 .wms-summary-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:13px 0}
 .wms-main-metric-button{font-size:13px;min-height:42px;box-shadow:0 5px 18px #3ed5ac1c}
-.wms-modal{width:min(94vw,760px);max-width:760px;max-height:min(89vh,820px);overflow:auto;border:1px solid #36596b;border-radius:21px;color:#eef9fb;background:linear-gradient(140deg,#122939,#0b192a);padding:26px;box-shadow:0 25px 90px #0009}
+.wms-modal{width:min(96vw,1120px);max-width:1120px;max-height:min(89vh,820px);overflow:auto;border:1px solid #36596b;border-radius:21px;color:#eef9fb;background:linear-gradient(140deg,#122939,#0b192a);padding:26px;box-shadow:0 25px 90px #0009}
 .wms-modal::backdrop{background:#050e17c9;backdrop-filter:blur(5px)}
 .wms-modal-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
 .wms-modal-head h2{font-size:clamp(21px,2.5vw,27px);margin:4px 0 8px;line-height:1.2}
@@ -165,6 +165,37 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-general-note{font-size:12px;line-height:1.65;padding:13px 15px;border:1px solid #6d603f;background:#352d1e;color:#f0d3a0;border-radius:12px}
 .wms-modal-bottom{display:flex;justify-content:flex-end;margin-top:18px}
 @media(max-width:640px){.wms-modal{padding:17px}.wms-general-grid{grid-template-columns:1fr}.wms-summary-actions{flex-direction:column;align-items:stretch}.wms-summary-actions button{width:100%}}
+
+.wms-model-section{border-top:1px solid #355266;padding-top:19px;margin-top:8px}
+.wms-model-title{display:flex;gap:12px;align-items:start;justify-content:space-between}
+.wms-model-title h3{font-size:16px;margin:0 0 4px;color:#ebf5fb}
+.wms-model-title p{font-size:11px;color:#99b5c6;line-height:1.6;margin:0}
+.wms-model-count{font-size:11px;color:#9bdac7;white-space:nowrap;border:1px solid #315e57;border-radius:12px;padding:5px 9px}
+.wms-model-filters{display:flex;flex-wrap:wrap;gap:11px;margin:16px 0 10px}
+.wms-model-filters label{font-size:11px;color:#a9c4d2;display:grid;gap:5px;flex:1;min-width:190px}
+.wms-model-filters input,.wms-model-filters select{background:#0b1b2a;border:1px solid #39586b;color:#ebf5fb;border-radius:9px;padding:10px;font-size:12px;width:100%}
+.wms-model-legend{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.wms-model-legend span{border:1px solid #3a5264;border-radius:6px;padding:4px 8px;font-size:10px}
+.wms-legend-red,.wms-model-pill.critical{background:#43262c;color:#ffaaa7;border-color:#92505a!important}
+.wms-legend-amber,.wms-model-pill.warning{background:#3d3323;color:#f0c788;border-color:#94723f!important}
+.wms-legend-blue,.wms-model-pill.normal{background:#1c3654;color:#a4d2ff;border-color:#436f9d!important}
+.wms-legend-muted,.wms-model-pill.missing{background:#23303d;color:#b2c6d1}
+.wms-model-scroll{overflow:auto;max-height:390px;overscroll-behavior:contain;border:1px solid #355269;border-radius:12px;background:#0b1b2b}
+.wms-model-table{width:100%;min-width:980px;border-collapse:collapse;font-size:11px}
+.wms-model-table th{position:sticky;top:0;z-index:1;background:#20394b;color:#cadce7;padding:11px 9px;text-align:right;white-space:normal;min-width:72px;line-height:1.3;border-bottom:1px solid #426176}
+.wms-model-table th:first-child{text-align:left;min-width:206px}
+.wms-model-table td{padding:10px 9px;border-bottom:1px solid #2a4154;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wms-model-table td:first-child{text-align:left;white-space:normal}
+.wms-model-table tbody tr:hover{background:#17364b}
+.wms-model-name{display:flex;align-items:center;gap:8px;font-weight:750}
+.wms-model-name button{border:1px solid #385367;background:#223a4d;border-radius:5px;width:22px;height:22px;color:#b6dcea;cursor:pointer;font-size:14px;flex:none}
+.wms-model-name small{display:block;font-size:10px;color:#88aabb;font-weight:500}
+.wms-model-pill{display:inline-block;border:1px solid transparent;border-radius:13px;padding:4px 8px;font-weight:800;min-width:52px;text-align:center}
+.wms-model-detail td{text-align:left!important;white-space:normal!important;background:#0e283a;color:#bcd5e1;line-height:1.5}
+.wms-model-daygrid{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+.wms-model-daygrid span{display:inline-block;border:1px solid #33576a;border-radius:8px;padding:5px 9px;background:#18384a;font-size:10px}
+.wms-model-footnote{font-size:11px;line-height:1.6;color:#91b2c3;margin:12px 0}
+@media(max-width:640px){.wms-model-title{display:block}.wms-model-count{display:inline-block;margin-top:10px}.wms-model-filters{display:block}.wms-model-filters label{margin-bottom:10px}}
 </style>
 </head>
 <body class="wms-locked">
@@ -461,11 +492,32 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
     <button type="button" class="wms-modal-close" id="wmsGeneralClose" aria-label="Fechar janela">×</button>
   </div>
   <div class="wms-general-grid">
-   <div class="wms-general-kpi"><span>Instalações na amostra</span><strong id="wmsGenInstalled">—</strong><small>Seriais únicos em ASSINANTE</small></div>
-   <div class="wms-general-kpi"><span>Média geral por dia corrido</span><strong id="wmsGenAverage">—</strong><small>Inclui dias sem instalações registradas</small></div>
+   <div class="wms-general-kpi"><span>Instalações em 6 dias</span><strong id="wmsGenInstalled">—</strong><small>Seriais únicos; data da coluna P</small></div>
+   <div class="wms-general-kpi"><span>Média geral · 6 dias</span><strong id="wmsGenAverage">—</strong><small>Inclui dias com zero instalação</small></div>
    <div class="wms-general-kpi"><span>No estoque · Conect</span><strong id="wmsGenStock">—</strong><small>Não inclui técnicos, aceite nem NNE</small></div>
    <div class="wms-general-kpi wms-general-featured"><span>Autonomia estimada da base</span><strong id="wmsGenAutonomy">—</strong><small>Estoque na base ÷ consumo médio diário</small></div>
   </div>
+  <section class="wms-model-section" aria-labelledby="wmsGenModelTitle">
+   <div class="wms-model-title">
+     <div><h3 id="wmsGenModelTitle">Análise de seriais por equipamento</h3>
+       <p>Instalações por modelo, média dos últimos seis dias corridos e as duas autonomias. Estoque e consumo não são a mesma coisa.</p></div>
+     <span id="wmsGenModelCount" class="wms-model-count">— modelos</span>
+   </div>
+   <div class="wms-model-filters">
+     <label>Buscar equipamento <input id="wmsGenModelSearch" type="search" placeholder="Modelo ou código SAP" autocomplete="off"></label>
+     <label>Ordenar por <select id="wmsGenModelSort">
+       <option value="total">Maior estoque total</option>
+       <option value="risk">Menor autonomia na base</option>
+       <option value="usage">Maior consumo diário</option>
+     </select></label>
+   </div>
+   <div class="wms-model-legend"><span class="wms-legend-red">Até 5 dias · Crítico</span><span class="wms-legend-amber">Mais de 5 até 6 · Atenção</span><span class="wms-legend-blue">Mais de 6 · Normal</span><span class="wms-legend-muted">— · Sem consumo observado</span></div>
+   <div class="wms-model-scroll" role="region" aria-label="Tabela de médias e autonomias por equipamento" tabindex="0"><table class="wms-model-table">
+    <thead><tr><th>Equipamento</th><th>No estoque</th><th>Com técnico</th><th>Confirmação</th><th>Total</th><th>Instalados 6D</th><th>Média/dia</th><th>Autonomia total</th><th>Autonomia base</th></tr></thead>
+    <tbody id="wmsGenModelRows"><tr><td colspan="9">Aguardando dados do NAtlas e Conect.</td></tr></tbody>
+   </table></div>
+   <p class="wms-model-footnote">Autonomia total = (base + técnicos + confirmação) ÷ média diária. Autonomia da base = somente o estoque do almoxarifado ÷ média diária. Não somamos NNE. Modelos sem instalações observadas não têm autonomia calculável.</p>
+  </section>
   <p id="wmsGeneralStatus" class="wms-general-note" role="status">Aguardando posição operacional e histórico do NAtlas.</p>
   <div class="wms-modal-bottom"><button type="button" class="btn-ghost" id="wmsGeneralCloseBottom">Fechar</button></div>
 </dialog>
@@ -1707,7 +1759,7 @@ function dailyRender(){
 }
 async function dailyLoad(){
  if(!authSession?.access_token)return;
- try{const [means,lots,events]=await Promise.all([apiGet('wms_medias_curta','*'),apiGet('wms_leituras_diarias','referencia,anterior,dias,quantidade,novas,vinculadas',{order:'referencia.desc'}),apiGet('wms_baixas_compactas','numero_serie,detectado_em,data_instalacao,login_conect,carga_referencia,classificacao',{classificacao:'not.in.(historico_anterior,referencia_inicial)',order:'detectado_em.desc'})]);
+ try{const [means,lots,events]=await Promise.all([apiGet('wms_medias_curta','*'),apiGet('wms_leituras_diarias','referencia,anterior,dias,quantidade,novas,vinculadas',{order:'referencia.desc'}),apiGet('wms_baixas_compactas','numero_serie,detectado_em,data_instalacao,codigo_sap,login_conect,carga_referencia,classificacao',{classificacao:'not.in.(historico_anterior,referencia_inicial)',order:'detectado_em.desc'})]);
  dailyMeans=means;dailyEvents=events;const last=lots[0];
  $('dailyStatus').textContent=!last?'Aguardando a primeira fotografia.':!last.anterior?`Referência inicial: ${last.referencia}, ${pt(last.quantidade)} seriais. A média aparecerá após a próxima fotografia diária válida.`:`Última fotografia: ${last.referencia}; intervalo desde ${last.anterior}: ${last.dias} dia(s). ${pt(last.novas)} novos registros e ${pt(last.vinculadas)} vínculos recentes. ${last.dias>2?'Janela excedida: média indisponível.':'Média indicativa do consumo observado.'}`;
  dailyRender();dailyReady();
@@ -1858,40 +1910,120 @@ $('wmsStockDetailsToggle').addEventListener('click',()=>wmsStockShowDetails($('w
 function wmsDateOffset(ymd,delta){
  const date=new Date(ymd+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+delta);return date.toISOString().slice(0,10);
 }
+
+function wmsGenKey(sap){
+ const code=displaySap(sap||'').trim();
+ if(!code)return 'SEM SAP';
+ const label=nomeModeloSap(code);
+ return label==='MODELO NÃO IDENTIFICADO'?'SAP '+code:label;
+}
+function wmsGenDateText(day){return day?day.slice(8,10)+'/'+day.slice(5,7)+'/'+day.slice(0,4):'—'}
+function wmsGenStatus(days){
+ if(days===null)return 'missing';
+ if(days<=5)return 'critical';
+ if(days<=6)return 'warning';
+ return 'normal';
+}
+function wmsGenCell(row,value,cssClass){
+ const td=document.createElement('td');td.textContent=String(value);
+ if(cssClass)td.className=cssClass;row.append(td);return td;
+}
 function wmsGeneralRender(){
- const seriais=new Map();
+ const bySerial=new Map();
  for(const n of natlasBaixas){
   const serial=cleanSerial(n.numero_serie),day=dateForCG(n.data_ultima_alteracao_local);
-  if(serial&&day)seriais.set(serial,{day,source:'histórico'});
+  const sap=n.codigo_sap||byMaterialIndex.get(String(n.material_id))?.codigo_sap||'';
+  if(serial&&day)bySerial.set(serial,{day,sap,source:'histórico'});
  }
+ // Eventos posteriores sobrepõem o histórico do mesmo serial, sem duplicar o equipamento.
  for(const e of dailyEvents){
   const serial=cleanSerial(e.numero_serie),day=dateForCG(e.data_instalacao);
-  if(serial&&day)seriais.set(serial,{day,source:'diário'});
+  if(serial&&day)bySerial.set(serial,{day,sap:e.codigo_sap||bySerial.get(serial)?.sap||'',source:'diário'});
  }
- const dates=[...seriais.values()].map(x=>x.day).sort();
- const latest=dates.at(-1)||null,earliest=dates[0]||null;
- // Máximo de 7 dias mais recentes para evitar diluir a média com registros muito antigos.
- const start=earliest&&latest?(earliest>wmsDateOffset(latest,-6)?earliest:wmsDateOffset(latest,-6)):null;
- const periodDays=start&&latest?calendarDays(start,latest):0;
- const installations=periodDays?[...seriais.values()].filter(x=>x.day>=start&&x.day<=latest).length:null;
- const mean=periodDays?installations/periodDays:null;
+ const dates=[...bySerial.values()].map(x=>x.day).sort();
+ const latest=dates.at(-1)||null;
+ const start=latest?wmsDateOffset(latest,-5):null;
+ const validEvents=latest?[...bySerial.values()].filter(x=>x.day>=start&&x.day<=latest):[];
+ const count=latest?validEvents.length:null,mean=count===null?null:count/6;
  const hasBase=opsCurrentFromDB&&opsPositions.length>0;
+ const groups=new Map();
+ const group=name=>{if(!groups.has(name))groups.set(name,{name,codes:new Set(),base:0,tech:0,pending:0,events:[],total:0});return groups.get(name)};
+ if(hasBase){
+  const unique=new Set();
+  for(const p of opsPositions){
+   const serial=cleanSerial(p.numero_serie);
+   if(!serial||unique.has(serial))continue;unique.add(serial);
+   if(!['no_estoque','com_tecnico','confirmacao'].includes(p.situacao))continue;
+   const name=wmsGenKey(p.codigo_sap),g=group(name);
+   if(p.codigo_sap)g.codes.add(displaySap(p.codigo_sap));
+   if(p.situacao==='no_estoque')g.base++;
+   else if(p.situacao==='com_tecnico')g.tech++;
+   else g.pending++;
+  }
+ }
+ for(const event of validEvents){
+  const name=wmsGenKey(event.sap),g=group(name);
+  if(event.sap)g.codes.add(displaySap(event.sap));
+  g.events.push(event);
+ }
+ const models=[...groups.values()];
+ for(const g of models){
+  g.total=g.base+g.tech+g.pending;
+  g.installed=g.events.length;
+  g.avg=g.installed/6;
+  g.autonomyTotal=hasBase&&g.avg>0?g.total/g.avg:null;
+  g.autonomyBase=hasBase&&g.avg>0?g.base/g.avg:null;
+ }
  const base=hasBase?opsPositions.filter(p=>p.situacao==='no_estoque').length:null;
- const autonomy=base!==null&&mean>0?base/mean:null;
- const fmtDate=x=>x?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):'—';
- $('wmsGenInstalled').textContent=installations===null?'—':pt(installations);
+ $('wmsGenInstalled').textContent=count===null?'—':pt(count);
  $('wmsGenAverage').textContent=mean===null?'—':decimal(mean);
  $('wmsGenStock').textContent=base===null?'—':pt(base);
- $('wmsGenAutonomy').textContent=autonomy===null?'—':decimal(autonomy)+' dias';
- $('wmsGeneralWindow').textContent=periodDays?'Datas da coluna P: '+fmtDate(start)+' a '+fmtDate(latest)+' · '+periodDays+' dias corridos':'Sem instalações com data válida para calcular uma média';
- const sourceDaily=[...seriais.values()].some(x=>x.source==='diário');
- let note;
- if(!periodDays)note='Média indisponível: ainda não há seriais datados suficientes no NAtlas. Não trate valores ausentes como consumo zero.';
- else if(!hasBase)note='Amostra NAtlas disponível, mas o estoque atual do Conect ainda não foi confirmado. Autonomia indisponível.';
- else note='Estimativa indicativa: '+pt(installations)+' seriais únicos com data de instalação na coluna P, distribuídos por '+periodDays+' dia(s) corrido(s), incluindo dias sem registros. Estoque da base do Conect '+fmtDate(opsReference)+'. '+(sourceDaily?'Combina a amostra histórica com novos seriais, sem duplicar.':'Amostra histórica do NAtlas; a média operacional validada depende das próximas fotografias diárias.')+' Não inclui equipamentos com técnicos nem NNE no estoque da base.';
+ $('wmsGenAutonomy').textContent=base!==null&&mean>0?decimal(base/mean)+' dias':'—';
+ $('wmsGeneralWindow').textContent=latest?'Últimos 6 dias corridos com referência no NAtlas: '+wmsGenDateText(start)+' a '+wmsGenDateText(latest):'Aguardando dados de instalação datados';
+ const search=$('wmsGenModelSearch').value.trim().toLocaleLowerCase('pt-BR'),sort=$('wmsGenModelSort').value;
+ const shown=models.filter(g=>g.name.toLocaleLowerCase('pt-BR').includes(search)||[...g.codes].join(' ').includes(search));
+ shown.sort((a,b)=>sort==='risk'?(a.autonomyBase??Infinity)-(b.autonomyBase??Infinity)||b.total-a.total:sort==='usage'?b.avg-a.avg||b.total-a.total:b.total-a.total||b.avg-a.avg);
+ $('wmsGenModelCount').textContent=shown.length+' modelo(s)';
+ const body=$('wmsGenModelRows');body.replaceChildren();
+ if(!shown.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=9;td.textContent=latest?'Nenhum modelo corresponde ao filtro.':'O NAtlas ainda não tem datas de instalação carregadas.';tr.append(td);body.append(tr);}
+ for(const g of shown){
+  const tr=document.createElement('tr');
+  const nameTd=document.createElement('td'),wrap=document.createElement('div');wrap.className='wms-model-name';
+  const toggle=document.createElement('button');toggle.type='button';toggle.textContent='+';toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Detalhes de '+g.name);
+  const nameBlock=document.createElement('div'),strong=document.createElement('strong');strong.textContent=g.name;nameBlock.append(strong);
+  const codes=[...g.codes].sort();if(codes.length){const sub=document.createElement('small');sub.textContent=codes.join(', ');nameBlock.append(sub);}
+  wrap.append(toggle,nameBlock);nameTd.append(wrap);tr.append(nameTd);
+  for(const n of [g.base,g.tech,g.pending,g.total])wmsGenCell(tr,hasBase?pt(n):'—');
+  wmsGenCell(tr,pt(g.installed));wmsGenCell(tr,decimal(g.avg));
+  for(const val of [g.autonomyTotal,g.autonomyBase]){
+   const cell=document.createElement('td'),pill=document.createElement('span');
+   pill.className='wms-model-pill '+wmsGenStatus(val);
+   pill.textContent=val===null?'—':decimal(val)+' d';
+   cell.append(pill);tr.append(cell);
+  }
+  body.append(tr);
+  const detail=document.createElement('tr');detail.className='wms-model-detail';detail.hidden=true;
+  const full=document.createElement('td');full.colSpan=9;
+  const caption=document.createElement('strong');caption.textContent='Instalações por data (coluna P do NAtlas):';full.append(caption);
+  const daygrid=document.createElement('div');daygrid.className='wms-model-daygrid';
+  for(let i=0;i<6;i++){
+   const day=wmsDateOffset(start,i),n=g.events.filter(x=>x.day===day).length;
+   const chip=document.createElement('span');chip.textContent=wmsGenDateText(day).slice(0,5)+' · '+n;daygrid.append(chip);
+  }
+  full.append(daygrid);
+  const formula=document.createElement('div');formula.textContent=g.installed+' instalações ÷ 6 dias = '+decimal(g.avg)+'/dia. Autonomia total: '+(g.autonomyTotal===null?'não calculável':decimal(g.autonomyTotal)+' dias')+'; autonomia no almoxarifado: '+(g.autonomyBase===null?'não calculável':decimal(g.autonomyBase)+' dias')+'.';
+  full.append(formula);detail.append(full);body.append(detail);
+  toggle.addEventListener('click',()=>{detail.hidden=!detail.hidden;toggle.textContent=detail.hidden?'+':'−';toggle.setAttribute('aria-expanded',String(!detail.hidden));});
+ }
+ const sourceDaily=validEvents.some(x=>x.source==='diário');
+ let note='';
+ if(!latest)note='Sem dados NAtlas com data válida. As médias e autonomias não serão apresentadas como zero.';
+ else if(!hasBase)note='O NAtlas tem seriais datados, mas o estoque do Conect ainda não está confirmado. A autonomia por modelo ficará indisponível.';
+ else note='Médias indicativas do NAtlas nos últimos 6 dias até '+wmsGenDateText(latest)+', incluindo dias sem instalações. Posição do Conect: '+wmsGenDateText(opsReference)+'. '+(sourceDaily?'Inclui os novos eventos importados sem duplicação por serial. ':'Até aqui, somente a amostra histórica está disponível. ')+'Autonomia total inclui carga de técnicos e aceite; autonomia da base considera somente “No estoque”. '+(opsReference!==latest?'ATENÇÃO: as fontes estão em datas diferentes. ':'')+'Sem série diária completa validada, não use os prazos como garantia de abastecimento.';
  $('wmsGeneralStatus').textContent=note;
 }
 const wmsModal=$('wmsGeneralModal');
+for(const id of ['wmsGenModelSearch','wmsGenModelSort'])$(id).addEventListener(id==='wmsGenModelSearch'?'input':'change',()=>{if(wmsModal.open)wmsGeneralRender()});
 $('wmsGeneralOpen').addEventListener('click',()=>{wmsGeneralRender();if(!wmsModal.open)wmsModal.showModal()});
 for(const id of ['wmsGeneralClose','wmsGeneralCloseBottom'])$(id).addEventListener('click',()=>wmsModal.close());
 wmsModal.addEventListener('click',e=>{if(e.target===wmsModal)wmsModal.close()});
