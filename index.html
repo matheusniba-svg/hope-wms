@@ -1296,14 +1296,16 @@ async function wmsSheetRows(file){
  let mr;
  while((mr=rx.exec(xml))!==null){
   const number=Number(/\br="(\d+)"/.exec(mr[1])?.[1]||0);const row=[];
-  const crx=/<c\b([^>]*)>([\s\S]*?)<\/c>/g;let mc;
+  // Lê tanto células normais <c>...</c> quanto vazias <c .../> sem deslocar colunas.
+  const crx=/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;let mc;
   while((mc=crx.exec(mr[2]))!==null){
    const address=/\br="([A-Z]+)\d+"/.exec(mc[1])?.[1];if(!address)continue;
    const col=fromExcelColumn(address);if(col<0||col>60)continue;
    const kind=/\bt="([^"]+)"/.exec(mc[1])?.[1];
-   let v=/<v>([\s\S]*?)<\/v>/.exec(mc[2])?.[1]||'';
+   const xmlCell=mc[2]||'';
+   let v=/<v>([\s\S]*?)<\/v>/.exec(xmlCell)?.[1]||'';
    if(kind==='s')v=shared[Number(v)]??'';
-   else if(kind==='inlineStr')v=/<t[^>]*>([\s\S]*?)<\/t>/.exec(mc[2])?.[1]||'';
+   else if(kind==='inlineStr')v=/<t[^>]*>([\s\S]*?)<\/t>/.exec(xmlCell)?.[1]||'';
    row[col]=String(v).trim();
   }
   if(row.some(x=>x))out.push({line:number,row});
@@ -1709,8 +1711,10 @@ function wmsBatchRefresh(){
  $('wmsBatchConectStat').textContent=c+'/6 arquivos';
  $('wmsBatchConectDetail').textContent=c===6&&cv===''?pt(['no_estoque','com_tecnico','confirmacao'].reduce((n,k)=>n+(importsPreview.get(k)?.unique||0),0))+' seriais conferidos':c===6?(cv||'Conferindo os arquivos...'):'Aguardando os 6 KPI do Conect';
  const d=dailyCandidate;
- $('wmsBatchDailyStat').textContent=!sel.diario?'Não selecionado':d?'NAtlas conferido':'Conferindo...';
- $('wmsBatchDailyDetail').textContent=d?pt(d.linhas.filter(x=>x.local==='ASSINANTE'&&x.tipo_local==='ASSINANTE').length)+' seriais em ASSINANTE; coluna P lida':sel.diario?$('dailyPreview').textContent.slice(0,150):'Selecione o NAtlas completo';
+ const dailyMsg=$('dailyPreview').textContent||'';
+ const dailyFail=!!sel.diario&&!d&&dailyMsg!=='Conferindo o relatório...'&&dailyMsg!=='Selecione o relatório para conferir, antes de gravar.';
+ $('wmsBatchDailyStat').textContent=!sel.diario?'Não selecionado':d?'NAtlas conferido':dailyFail?'Erro na leitura':'Conferindo...';
+ $('wmsBatchDailyDetail').textContent=d?pt(d.linhas.filter(x=>x.local==='ASSINANTE'&&x.tipo_local==='ASSINANTE').length)+' seriais em ASSINANTE; coluna P lida':sel.diario?dailyMsg.slice(0,150):'Selecione o NAtlas completo';
  const n=wmsFontes.nne;
  $('wmsBatchNneStat').textContent=!sel.nne?'Opcional':n?'NNE conferido':'Conferindo...';
  $('wmsBatchNneDetail').textContent=n?pt(n.stats.units)+' terminais ETER em trânsito':sel.nne?$('wmsNneMsg').textContent.slice(0,130):'Abastecimento independente';
