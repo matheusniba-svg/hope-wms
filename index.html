@@ -198,6 +198,11 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 @media(max-width:640px){.wms-model-title{display:block}.wms-model-count{display:inline-block;margin-top:10px}.wms-model-filters{display:block}.wms-model-filters label{margin-bottom:10px}}
 .wms-date-auto{display:block;border:1px solid #365769;border-radius:10px;background:#0b1b2c;color:#77eac6;padding:12px 13px;font-size:15px;font-weight:780;font-variant-numeric:tabular-nums}
 .wms-model-provisional{color:#efc48d!important}.wms-model-validated{color:#69d4b3!important}
+.wms-general-freshness{background:#3b2d21;border:1px solid #a57b47;border-radius:12px;padding:13px 16px;margin-top:16px;color:#fff1d8}
+.wms-general-freshness[hidden]{display:none!important}
+.wms-general-freshness strong{display:block;font-size:13px}
+.wms-general-freshness span{display:block;font-size:12px;line-height:1.6;margin:5px 0 10px}
+.wms-general-freshness button{font-size:12px;padding:7px 11px;border-color:#ab884e}
 </style>
 </head>
 <body class="wms-locked">
@@ -493,6 +498,11 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <div class="wms-modal-head">
     <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE · CÁLCULO D-1 · v18.6</span><h2 id="wmsGeneralTitle">Consumo geral e autonomia</h2><p id="wmsGeneralWindow" class="wms-modal-subtitle">Consultando o histórico...</p></div>
     <button type="button" class="wms-modal-close" id="wmsGeneralClose" aria-label="Fechar janela">×</button>
+  </div>
+  <div id="wmsGeneralFreshness" class="wms-general-freshness" role="status" aria-live="polite" hidden>
+    <strong id="wmsGeneralFreshnessTitle">Atualização pendente</strong>
+    <span id="wmsGeneralFreshnessMessage">Aguardando conferência das datas.</span>
+    <button type="button" class="btn-ghost" id="wmsGeneralGoImport">Ir para Atualizações</button>
   </div>
   <div class="wms-general-grid">
    <div class="wms-general-kpi"><span>Instalações no D-1</span><strong id="wmsGenInstalled">—</strong><small>Seriais únicos; data da coluna P</small></div>
@@ -1987,6 +1997,16 @@ function wmsGeneralRender(){
  const hasNatlas=Boolean(reference&&(usePreview||(dailyLatestReference&&dailyLatestReference>=reference)));
  const validEvents=targetDay&&hasNatlas?[...bySerial.values()].filter(x=>x.day===targetDay):[];
  const installed=targetDay&&hasNatlas?validEvents.length:null;
+ const needsUpdate=Boolean(reference&&(!dailyLatestReference||dailyLatestReference<reference));
+ const freshness=$('wmsGeneralFreshness');
+ freshness.hidden=!needsUpdate&&!usePreview;
+ if(usePreview){
+  $('wmsGeneralFreshnessTitle').textContent='Prévia do NAtlas de '+wmsGenDateText(reference)+' — ainda não gravada';
+  $('wmsGeneralFreshnessMessage').textContent='Os números abaixo vêm da planilha selecionada em Atualizações, não do histórico confirmado. Confira os resultados e use “Atualizar somente NAtlas” quando estiverem corretos.';
+ }else if(needsUpdate){
+  $('wmsGeneralFreshnessTitle').textContent='NAtlas de '+wmsGenDateText(reference)+' ainda não confirmado';
+  $('wmsGeneralFreshnessMessage').textContent='O Conect já está em '+wmsGenDateText(reference)+', mas o último NAtlas gravado é de '+wmsGenDateText(dailyLatestReference)+'. O consumo D-1 está indisponível, não é zero. Selecione o NAtlas completo de '+wmsGenDateText(reference)+' em Atualizações; não precisa reenviar os seis KPI do Conect.';
+ }
  // Em uma janela de um único dia, consumo médio/dia = instalações do próprio dia.
  const avg=installed;
  const hasBase=opsCurrentFromDB&&opsPositions.length>0;
@@ -2120,6 +2140,11 @@ function wmsGeneralRender(){
  $('wmsGeneralStatus').textContent=note;
 }
 const wmsModal=$('wmsGeneralModal');
+$('wmsGeneralGoImport').addEventListener('click',()=>{
+ wmsModal.close();
+ v17Open('importar');
+ $('wmsBatchFiles').focus();
+});
 for(const id of ['wmsGenModelSearch','wmsGenModelSort'])$(id).addEventListener(id==='wmsGenModelSearch'?'input':'change',()=>{if(wmsModal.open)wmsGeneralRender()});
 $('wmsGeneralOpen').addEventListener('click',()=>{wmsGeneralRender();if(!wmsModal.open)wmsModal.showModal()});
 for(const id of ['wmsGeneralClose','wmsGeneralCloseBottom'])$(id).addEventListener('click',()=>wmsModal.close());
