@@ -143,6 +143,28 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-batch-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
 .wms-batch-actions .btn{min-height:47px}
 @media(max-width:850px){.wms-batch-grid{grid-template-columns:1fr}.wms-batch-actions{flex-direction:column;align-items:stretch}.wms-batch-actions button{width:100%}}
+
+/* Resumo compacto do estoque e modal de consumo — sem alterar o inventário */
+.wms-stock-compact #sapFilterPanel,.wms-stock-compact #stockPanel,.wms-stock-compact #consumptionPanel{display:none!important}
+#wmsStockDetails[hidden]{display:none!important}
+.wms-summary-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:13px 0}
+.wms-main-metric-button{font-size:13px;min-height:42px;box-shadow:0 5px 18px #3ed5ac1c}
+.wms-modal{width:min(94vw,760px);max-width:760px;max-height:min(89vh,820px);overflow:auto;border:1px solid #36596b;border-radius:21px;color:#eef9fb;background:linear-gradient(140deg,#122939,#0b192a);padding:26px;box-shadow:0 25px 90px #0009}
+.wms-modal::backdrop{background:#050e17c9;backdrop-filter:blur(5px)}
+.wms-modal-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.wms-modal-head h2{font-size:clamp(21px,2.5vw,27px);margin:4px 0 8px;line-height:1.2}
+.wms-modal-eyebrow{font-size:10px;color:#6fe3c0;letter-spacing:1.2px;font-weight:900}
+.wms-modal-subtitle{font-size:12px;color:#9fbccd;line-height:1.5;margin:0}
+.wms-modal-close{border:1px solid #335369;border-radius:9px;background:#17354a;color:#f1f9fb;font-size:25px;line-height:1;width:36px;height:36px;cursor:pointer;flex:none}
+.wms-general-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:22px 0}
+.wms-general-kpi{border:1px solid #385165;border-radius:15px;padding:18px 16px;background:#0c2031;min-width:0}
+.wms-general-kpi span{display:block;font-size:12px;color:#c1d6df}
+.wms-general-kpi strong{display:block;font-size:clamp(28px,4vw,38px);font-weight:800;color:#6be6c0;margin:6px 0 3px;font-variant-numeric:tabular-nums;letter-spacing:-.8px}
+.wms-general-kpi small{display:block;font-size:11px;line-height:1.5;color:#9eb8c6}
+.wms-general-featured{border-color:#3e8d7a;background:#12392f}
+.wms-general-note{font-size:12px;line-height:1.65;padding:13px 15px;border:1px solid #6d603f;background:#352d1e;color:#f0d3a0;border-radius:12px}
+.wms-modal-bottom{display:flex;justify-content:flex-end;margin-top:18px}
+@media(max-width:640px){.wms-modal{padding:17px}.wms-general-grid{grid-template-columns:1fr}.wms-summary-actions{flex-direction:column;align-items:stretch}.wms-summary-actions button{width:100%}}
 </style>
 </head>
 <body class="wms-locked">
@@ -231,8 +253,13 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
    <div class="ops-stat"><span>Aguardando aceite</span><strong id="opsPending">—</strong><small>Não somar duas vezes</small></div>
    <div class="ops-stat"><span>Total ativo</span><strong id="opsTotal">—</strong><small>União de seriais únicos</small></div>
  </div>
+ <div class="wms-summary-actions">
+   <button class="btn wms-main-metric-button" type="button" id="wmsGeneralOpen"><span aria-hidden="true">◉</span> Consumo geral e autonomia</button>
+   <button class="btn-ghost" type="button" id="wmsStockDetailsToggle" aria-expanded="false" aria-controls="wmsStockDetails">Mostrar tabela e detalhes por modelo</button>
+  </div>
  <div class="ops-specials" id="opsSpecials"><span>Reversa/retirados: selecione os seis arquivos para conferir categorias fora do saldo ativo.</span></div>
  <div class="ops-explainer" id="opsLimit">A Matriz de 06/11 e o Conect de 09/11 não são fotografias do mesmo instante. Diferenças entre essas datas exigem análise de movimentações, não são perdas confirmadas.</div>
+ <div id="wmsStockDetails" hidden>
  <div class="section-top"><div><strong class="mini">Estoque, consumo e cobertura por modelo</strong><div class="section-note">A Matriz inclui material com técnicos; No Estoque é a situação separada no Conect. “—” significa fonte ainda não carregada, nunca saldo zero. Cobertura só aparece com histórico suficiente e datas compatíveis.</div></div><div class="filters"><input id="opsSearch" class="search" placeholder="Buscar modelo ou equipamento" aria-label="Buscar modelo na operação"/><select id="opsSort" aria-label="Ordenar visão operacional"><option value="stock">Maior estoque</option><option value="low">Menor estoque</option><option value="usage">Maior consumo observado</option><option value="sap">Modelo (A–Z)</option></select></div></div>
  <div class="tablebox"><table><thead><tr><th>Modelo</th><th>Mapeamento</th><th class="num">No Estoque Conect</th><th class="num">Com Técnicos Conect</th><th class="num">Aceite Conect</th><th class="num">Matriz total 06/11</th><th class="num">Disponível teórico 06/11</th><th class="num">Δ*</th><th class="num">Instalações NAtlas</th><th>Cobertura total</th><th>Autonomia base</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="11">Carregue os relatórios do Conect.</td></tr></tbody></table></div>
  <div class="section-note" id="opsFooter">*A coluna Δ só é conclusiva com snapshots equivalentes, na mesma data e com as mesmas regras de inclusão. Trânsito não é estoque disponível.</div>
@@ -262,6 +289,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 
  </div>
  <div class="ops-explainer"><strong>Dados ainda necessários para automatizar todo o fluxo:</strong> relatórios históricos BAIXADOS/INSTALADOS com técnico, data, OS e contrato; Matriz atualizada no mesmo dia; planilha de abastecimento com SAP, quantidade, nota fiscal e previsão de chegada. Sem essas fontes, os rankings, divergências e coberturas são classificados como incompletos.</div>
+ </div>
 </section>
 
 <section class="panel" id="wmsBatchPanel" aria-labelledby="wmsBatchTitle">
@@ -427,6 +455,20 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 </section>
 
 </main></div>
+<dialog id="wmsGeneralModal" class="wms-modal" aria-labelledby="wmsGeneralTitle">
+  <div class="wms-modal-head">
+    <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE</span><h2 id="wmsGeneralTitle">Consumo geral e autonomia</h2><p id="wmsGeneralWindow" class="wms-modal-subtitle">Consultando o histórico...</p></div>
+    <button type="button" class="wms-modal-close" id="wmsGeneralClose" aria-label="Fechar janela">×</button>
+  </div>
+  <div class="wms-general-grid">
+   <div class="wms-general-kpi"><span>Instalações na amostra</span><strong id="wmsGenInstalled">—</strong><small>Seriais únicos em ASSINANTE</small></div>
+   <div class="wms-general-kpi"><span>Média geral por dia corrido</span><strong id="wmsGenAverage">—</strong><small>Inclui dias sem instalações registradas</small></div>
+   <div class="wms-general-kpi"><span>No estoque · Conect</span><strong id="wmsGenStock">—</strong><small>Não inclui técnicos, aceite nem NNE</small></div>
+   <div class="wms-general-kpi wms-general-featured"><span>Autonomia estimada da base</span><strong id="wmsGenAutonomy">—</strong><small>Estoque na base ÷ consumo médio diário</small></div>
+  </div>
+  <p id="wmsGeneralStatus" class="wms-general-note" role="status">Aguardando posição operacional e histórico do NAtlas.</p>
+  <div class="wms-modal-bottom"><button type="button" class="btn-ghost" id="wmsGeneralCloseBottom">Fechar</button></div>
+</dialog>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -1800,6 +1842,59 @@ $('wmsBatchSubmit').addEventListener('click',async()=>{
  }finally{wmsBatchBusy=false;wmsBatchRefresh()}
 });
 wmsBatchRefresh();
+
+
+// Resumo geral: seriais únicos, data da coluna P, dias corridos incluindo zero.
+// A fotografia NAtlas inicial é uma amostra histórica: não a apresentamos como série diária validada.
+document.body.classList.add('wms-stock-compact');
+function wmsStockShowDetails(open){
+ const show=Boolean(open);
+ $('wmsStockDetails').hidden=!show;
+ document.body.classList.toggle('wms-stock-compact',!show);
+ $('wmsStockDetailsToggle').textContent=show?'Ocultar tabela e detalhes por modelo':'Mostrar tabela e detalhes por modelo';
+ $('wmsStockDetailsToggle').setAttribute('aria-expanded',String(show));
+}
+$('wmsStockDetailsToggle').addEventListener('click',()=>wmsStockShowDetails($('wmsStockDetails').hidden));
+function wmsDateOffset(ymd,delta){
+ const date=new Date(ymd+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+delta);return date.toISOString().slice(0,10);
+}
+function wmsGeneralRender(){
+ const seriais=new Map();
+ for(const n of natlasBaixas){
+  const serial=cleanSerial(n.numero_serie),day=dateForCG(n.data_ultima_alteracao_local);
+  if(serial&&day)seriais.set(serial,{day,source:'histórico'});
+ }
+ for(const e of dailyEvents){
+  const serial=cleanSerial(e.numero_serie),day=dateForCG(e.data_instalacao);
+  if(serial&&day)seriais.set(serial,{day,source:'diário'});
+ }
+ const dates=[...seriais.values()].map(x=>x.day).sort();
+ const latest=dates.at(-1)||null,earliest=dates[0]||null;
+ // Máximo de 7 dias mais recentes para evitar diluir a média com registros muito antigos.
+ const start=earliest&&latest?(earliest>wmsDateOffset(latest,-6)?earliest:wmsDateOffset(latest,-6)):null;
+ const periodDays=start&&latest?calendarDays(start,latest):0;
+ const installations=periodDays?[...seriais.values()].filter(x=>x.day>=start&&x.day<=latest).length:null;
+ const mean=periodDays?installations/periodDays:null;
+ const hasBase=opsCurrentFromDB&&opsPositions.length>0;
+ const base=hasBase?opsPositions.filter(p=>p.situacao==='no_estoque').length:null;
+ const autonomy=base!==null&&mean>0?base/mean:null;
+ const fmtDate=x=>x?x.slice(8,10)+'/'+x.slice(5,7)+'/'+x.slice(0,4):'—';
+ $('wmsGenInstalled').textContent=installations===null?'—':pt(installations);
+ $('wmsGenAverage').textContent=mean===null?'—':decimal(mean);
+ $('wmsGenStock').textContent=base===null?'—':pt(base);
+ $('wmsGenAutonomy').textContent=autonomy===null?'—':decimal(autonomy)+' dias';
+ $('wmsGeneralWindow').textContent=periodDays?'Datas da coluna P: '+fmtDate(start)+' a '+fmtDate(latest)+' · '+periodDays+' dias corridos':'Sem instalações com data válida para calcular uma média';
+ const sourceDaily=[...seriais.values()].some(x=>x.source==='diário');
+ let note;
+ if(!periodDays)note='Média indisponível: ainda não há seriais datados suficientes no NAtlas. Não trate valores ausentes como consumo zero.';
+ else if(!hasBase)note='Amostra NAtlas disponível, mas o estoque atual do Conect ainda não foi confirmado. Autonomia indisponível.';
+ else note='Estimativa indicativa: '+pt(installations)+' seriais únicos com data de instalação na coluna P, distribuídos por '+periodDays+' dia(s) corrido(s), incluindo dias sem registros. Estoque da base do Conect '+fmtDate(opsReference)+'. '+(sourceDaily?'Combina a amostra histórica com novos seriais, sem duplicar.':'Amostra histórica do NAtlas; a média operacional validada depende das próximas fotografias diárias.')+' Não inclui equipamentos com técnicos nem NNE no estoque da base.';
+ $('wmsGeneralStatus').textContent=note;
+}
+const wmsModal=$('wmsGeneralModal');
+$('wmsGeneralOpen').addEventListener('click',()=>{wmsGeneralRender();if(!wmsModal.open)wmsModal.showModal()});
+for(const id of ['wmsGeneralClose','wmsGeneralCloseBottom'])$(id).addEventListener('click',()=>wmsModal.close());
+wmsModal.addEventListener('click',e=>{if(e.target===wmsModal)wmsModal.close()});
 
 </script>
 </body>
