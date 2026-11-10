@@ -197,6 +197,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-model-footnote{font-size:11px;line-height:1.6;color:#91b2c3;margin:12px 0}
 @media(max-width:640px){.wms-model-title{display:block}.wms-model-count{display:inline-block;margin-top:10px}.wms-model-filters{display:block}.wms-model-filters label{margin-bottom:10px}}
 .wms-date-auto{display:block;border:1px solid #365769;border-radius:10px;background:#0b1b2c;color:#77eac6;padding:12px 13px;font-size:15px;font-weight:780;font-variant-numeric:tabular-nums}
+.wms-model-provisional{color:#efc48d!important}.wms-model-validated{color:#69d4b3!important}
 </style>
 </head>
 <body class="wms-locked">
@@ -1819,13 +1820,15 @@ function wmsBatchRefresh(){
  const dated=sel.diario?wmsBatchDate(sel.diario.name):null;
  const unmatched=dated&&date&&dated!==date;
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
- const ready=c===6&&cv===''&&!!d&&!!authSession?.access_token&&!!$('wmsBatchComplete').checked&&!!date&&!unmatched&&!wmsBatchBusy;
+ const blockingWarning=sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w));
+ const ready=c===6&&cv===''&&!!d&&!!authSession?.access_token&&!!$('wmsBatchComplete').checked&&!!date&&!unmatched&&!blockingWarning&&!wmsBatchBusy;
  $('wmsBatchSubmit').disabled=!ready;
  // Permite concluir NAtlas quando o Conect dessa mesma data já foi gravado.
  const latestConectDate=opsCurrentFromDB?opsReference:null;
- $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&date===dated&&latestConectDate===date&&!wmsBatchBusy&& !sel.warnings.some(w=>/datas diferentes|duplicado|incompatível/.test(w)));
+ $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&date===dated&&latestConectDate===date&&!wmsBatchBusy&& !blockingWarning);
  $('wmsBatchNneSave').disabled=!n||!!n.invalid||!authSession?.access_token||wmsBatchBusy;
  let main=ready?'Pronto: os dois relatórios podem ser registrados após sua confirmação.':c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
+ if(blockingWarning)main='Atualização bloqueada: há arquivo repetido, formato incompatível ou datas divergentes. Corrija a seleção antes de gravar.';
  if(unmatched)main='A data informada não corresponde ao nome do NAtlas ('+dated+'). Corrija antes de continuar.';
  $('wmsBatchStatus').textContent=main+(sel.matriz?'\nMatriz histórica reconhecida, sem sobrescrever estoque.':'')+(issue?'\n'+issue:'');
 }
@@ -1874,7 +1877,7 @@ for(const id of ['importStatus','dailyPreview','wmsNnePreview','conectCommitMess
 $('wmsBatchOnlyNatlas').addEventListener('click',async()=>{
  const date=$('wmsBatchDateInput').value,sel=wmsBatchSelection;
  if(wmsBatchBusy||!dailyCandidate||!sel.diario||!authSession?.access_token||!$('wmsBatchComplete').checked||!opsCurrentFromDB||opsReference!==date||wmsBatchDate(sel.diario.name)!==date)return;
- if(sel.warnings.some(w=>/datas diferentes|duplicado|incompatível/.test(w)))return;
+ if(sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w)))return;
  if(!window.confirm('Importar SOMENTE NAtlas '+date+'? O Conect dessa data já foi registrado. Serão cruzados os seriais e as datas da coluna P, sem reenviar a posição Conect.'))return;
  wmsBatchBusy=true;$('wmsBatchOnlyNatlas').disabled=true;
  $('dailyDate').value=date;$('dailyComplete').checked=true;
@@ -1895,7 +1898,7 @@ $('wmsBatchSubmit').addEventListener('click',async()=>{
  const sel=wmsBatchSelection,date=$('wmsBatchDateInput').value;
  if(wmsBatchBusy||!sel.diario||!dailyCandidate||sel.conect.size!==6||conectValidacao()||!$('wmsBatchComplete').checked||!authSession?.access_token)return;
  if(wmsBatchDate(sel.diario.name)!==date){$('wmsBatchProgress').textContent='Corrija a data do NAtlas antes de gravar.';return}
- if(sel.warnings.some(w=>/datas diferentes|duplicado|incompatível/.test(w))){$('wmsBatchProgress').textContent='Há um problema na seleção. Corrija antes de gravar.';return}
+ if(sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w))){$('wmsBatchProgress').textContent='Há um problema na seleção. Corrija antes de gravar.';return}
  if(!window.confirm('Confirmar atualização do HOPE em '+date+'?\n\nConect: 6 relatórios conferidos.\nNAtlas: '+dailyCandidate.linhas.length+' seriais; data de instalação da coluna P.\n\nO sistema registrará primeiro o Conect e depois o NAtlas. A Matriz histórica e o NNE não serão alterados.'))return;
  wmsBatchBusy=true;$('wmsBatchSubmit').disabled=true;$('wmsBatchNneSave').disabled=true;
  let conectDone=false;
@@ -2052,6 +2055,10 @@ function wmsGeneralRender(){
   const nameBlock=document.createElement('div'),strong=document.createElement('strong');strong.textContent=g.name;nameBlock.append(strong);
   const codes=[...g.codes].sort();
   if(codes.length){const sub=document.createElement('small');sub.textContent=codes.join(', ');nameBlock.append(sub);}
+  const validation=document.createElement('small'),modelStatus=statusModelo(g.name);
+  validation.textContent=modelStatus==='Conferido pelo bot'?'Modelo conferido':'Modelo provisório — confirmar classificação SAP';
+  validation.className=modelStatus==='Conferido pelo bot'?'wms-model-validated':'wms-model-provisional';
+  nameBlock.append(validation);
   wrap.append(toggle,nameBlock);nameTd.append(wrap);tr.append(nameTd);
   for(const n of [g.base,g.tech,g.pending,g.total])wmsGenCell(tr,hasBase?pt(n):'—');
   wmsGenCell(tr,installed===null?'—':pt(g.installed));
