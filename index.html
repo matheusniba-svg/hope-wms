@@ -205,6 +205,18 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-general-freshness button{font-size:12px;padding:7px 11px;border-color:#ab884e}
 .wms-easy-note{background:#11273a!important;border:1px solid #29475b!important;color:#bcd2df!important;font-size:12px!important;padding:10px 14px!important}
 .wms-extra-data summary{font-size:12px;color:#aec3d0}
+.tech-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tech-pending-section{border:1px solid #926b38;background:#3f311f66;border-radius:11px;padding:14px;margin:12px 0 16px}
+.tech-pending-section.hidden{display:none!important}
+.tech-pending-header{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.tech-pending-header h3{font-size:15px;margin:0;color:#f7deb6}
+.tech-pending-number{background:#e6b66826;border:1px solid #9d7a47;padding:5px 12px;border-radius:18px;color:#ffda94;font-size:14px}
+.tech-pending-section .section-note{margin:7px 0 12px;color:#e0cba5;line-height:1.5}
+.tech-pending-group{border-color:#80673d}
+.tech-pending-group summary{background:#2b291e}
+.tech-pending-group summary strong{font-size:12px;color:#f3ca85}
+.tech-pending-badge{display:inline-block;border:1px solid #9d753b;background:#3b2b18;border-radius:12px;color:#f5c783;font-size:11px;font-weight:650;padding:3px 9px;margin-top:5px}
+@media(max-width:700px){.tech-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body class="wms-locked">
@@ -427,10 +439,15 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 </section>
 <section class="panel" id="techniciansPanel">
   <div class="section-top"><div><h2>Inventário dos técnicos</h2><small>Carga individual do Conect (importação 3). Selecione o técnico para consultar seus equipamentos e seriais.</small></div><div class="export-actions"><button id="exportTechniciansExcel" class="btn-ghost mini" disabled>Exportar carga (Excel)</button><button id="backTechnicians" class="btn-ghost mini hidden" type="button">← Todos os técnicos</button></div></div>
-  <div class="tech-summary"><div class="metric"><span>Técnicos cadastrados</span><strong id="techCount">—</strong></div><div class="metric"><span>Equipamentos com técnicos</span><strong id="techTotal">—</strong></div><div class="metric"><span>Na carga selecionada</span><strong id="techSelectedTotal">—</strong></div></div>
+  <div class="tech-summary"><div class="metric"><span>Técnicos cadastrados</span><strong id="techCount">—</strong></div><div class="metric"><span>Equipamentos com técnicos</span><strong id="techTotal">—</strong></div><div class="metric"><span>Aguardando aceite</span><strong id="techPendingTotal">—</strong></div><div class="metric"><span>Na carga selecionada</span><strong id="techSelectedTotal">—</strong></div></div>
   <div class="tech-selectors"><label>Encontrar técnico (nome ou login)<input id="technicianSearch" type="search" placeholder="Digite o nome ou login Conect" /></label><label id="serialFilterWrap" class="hidden">Pesquisar equipamento ou serial da carga<input id="technicianMaterialSearch" type="search" placeholder="SAP, descrição ou número de série" /></label></div>
   <div id="techList" class="tech-list"><div class="empty">Conecte o banco para visualizar os técnicos.</div></div>
   <div id="techDetail" class="hidden" aria-live="polite"><div class="breadcrumb"><strong id="selectedTechnicianName"></strong><span class="section-note" id="selectedTechnicianLogin"></span></div>
+<section id="techPendingSection" class="tech-pending-section hidden" aria-labelledby="techPendingTitle">
+ <div class="tech-pending-header"><h3 id="techPendingTitle">Equipamentos aguardando aceite</h3><strong id="techPendingCount" class="tech-pending-number">0</strong></div>
+ <p class="section-note" id="techPendingSource">Equipamentos vinculados ao login Z no Conect; ainda não estão na carga confirmada do técnico.</p>
+ <div id="techPendingList"></div>
+</section>
 <div class="tech-consumption"><h3>Consumo individual do técnico <span class="status-chip warning" id="techConsumptionStatus">Aguardando confirmação</span></h3><div class="tech-consumption-stat"><div><small>Instalações com responsável atribuído</small><strong id="techSelectedInstalled">—</strong></div><div><small>Média indicativa / dia corrido</small><strong id="techSelectedAvg">—</strong></div><div><small>Indícios de vínculo pendentes</small><strong id="techSelectedEvidence">—</strong></div></div><p id="techSelectedConsumptionNote">A carga do técnico não comprova o consumo. Vamos cruzar serial instalado com relatório de instalações e histórico de responsabilidade.</p></div>
 <div class="tech-consumption" id="techNatlasSection" style="margin-top:12px">
   <div class="section-top"><div><h3>Baixas associadas ao login Z</h3><p class="section-note">Seriais com Local e Tipo Local = ASSINANTE no NAtlas, contrato identificado e último portador no Conect. A autoria do serviço permanece <strong>indicativa</strong>.</p></div><button id="techNatlasExcel" class="btn-ghost mini" type="button">Exportar baixas e contratos</button></div>
@@ -839,15 +856,57 @@ function buildTechnicianIndex(technicians,records){
   }
   $('techCount').textContent=pt(technicianList.length);$('techTotal').textContent=pt(allTechSerials.length);selectedTechnicianId=null;renderTechnicians();
 }
+function techPendingItems(t){
+ const login=String(t?.login||'').trim().toUpperCase(),unique=new Map();
+ if(!login)return [];
+ for(const p of opsPositions){
+  if(p.situacao!=='confirmacao'||p.login_conect!==login)continue;
+  const serial=cleanSerial(p.numero_serie);
+  if(!serial||unique.has(serial))continue;
+  unique.set(serial,{serial,sap:displaySap(p.codigo_sap),modelo:nomeModeloSap(p.codigo_sap)});
+ }
+ return [...unique.values()];
+}
+function renderTechPending(t){
+ const list=techPendingItems(t),section=$('techPendingSection');
+ section.classList.toggle('hidden',list.length===0);
+ $('techPendingCount').textContent=pt(list.length);
+ $('techPendingSource').textContent=(opsReference?'Conect de '+opsReference.slice(8,10)+'/'+opsReference.slice(5,7)+'/'+opsReference.slice(0,4)+' · ':'')+
+  (opsCurrentFromDB?'Equipamentos registrados':'Prévia ainda não gravada')+
+  '. Aguardam aceite do técnico e não entram na carga confirmada.';
+ const target=$('techPendingList');target.replaceChildren();
+ const term=$('technicianMaterialSearch').value.trim().toLocaleLowerCase('pt-BR'),groups=new Map();
+ for(const item of list){
+  const label=item.modelo+(item.sap?' · SAP '+item.sap:'');
+  if(term&&!label.toLocaleLowerCase('pt-BR').includes(term)&&!item.serial.toLocaleLowerCase('pt-BR').includes(term))continue;
+  if(!groups.has(label))groups.set(label,[]);
+  groups.get(label).push(item.serial);
+ }
+ for(const [model,serials] of [...groups].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR'))){
+  const details=document.createElement('details');details.className='details-group tech-pending-group';
+  if(term)details.open=true;
+  const summary=document.createElement('summary'),label=document.createElement('span'),count=document.createElement('strong');
+  label.textContent=model;count.textContent=pt(serials.length)+' aguardando';
+  summary.append(label,count);details.append(summary);
+  const ul=document.createElement('ul');
+  for(const serial of serials.sort()){const li=document.createElement('li');li.textContent=serial;ul.append(li)}
+  details.append(ul);target.append(details);
+ }
+ if(!groups.size){const empty=document.createElement('div');empty.className='empty';empty.textContent='Nenhum equipamento aguardando aceite corresponde à busca.';target.append(empty)}
+}
 function renderTechnicians(){
-  const chosen=technicianList.find(t=>t.id===selectedTechnicianId);$('techSelectedTotal').textContent=chosen?pt((technicianInventories.get(chosen.id)||[]).length):'—';
+  const chosen=technicianList.find(t=>t.id===selectedTechnicianId);
+  $('techPendingTotal').textContent=opsPositions.length?pt(opsPositions.filter(p=>p.situacao==='confirmacao'&&p.login_conect).length):'—';
+  $('techSelectedTotal').textContent=chosen?pt((technicianInventories.get(chosen.id)||[]).length):'—';
   const filter=$('technicianSearch').value.trim().toLocaleLowerCase('pt-BR');
   if(chosen){$('backTechnicians').classList.remove('hidden');$('serialFilterWrap').classList.remove('hidden');$('techList').classList.add('hidden');$('techDetail').classList.remove('hidden');$('selectedTechnicianName').textContent=chosen.name;$('selectedTechnicianLogin').textContent=chosen.login;
-    renderTechDetail(chosen);renderSelectedTechConsumption(chosen);renderTechNatlas(chosen);return;
+    renderTechPending(chosen);renderTechDetail(chosen);renderSelectedTechConsumption(chosen);renderTechNatlas(chosen);return;
   }
   $('backTechnicians').classList.add('hidden');$('serialFilterWrap').classList.add('hidden');$('techList').classList.remove('hidden');$('techDetail').classList.add('hidden');
   const filtered=technicianList.filter(t=>(t.name+' '+t.login).toLocaleLowerCase('pt-BR').includes(filter));const target=$('techList');target.replaceChildren();
-  for(const t of filtered){const button=document.createElement('button');button.type='button';const left=document.createElement('div');const name=document.createElement('strong');name.textContent=t.name;const login=document.createElement('span');login.className='secondary';login.textContent='Login Conect: '+t.login;left.append(name,login);const count=document.createElement('span');count.className='tech-count';count.textContent=pt((technicianInventories.get(t.id)||[]).length);button.append(left,count);button.addEventListener('click',()=>{selectedTechnicianId=t.id;$('technicianMaterialSearch').value='';renderTechnicians()});target.append(button)}
+  for(const t of filtered){const button=document.createElement('button');button.type='button';const left=document.createElement('div');const name=document.createElement('strong');name.textContent=t.name;const login=document.createElement('span');login.className='secondary';login.textContent='Login Conect: '+t.login;left.append(name,login);const pending=techPendingItems(t).length;
+  if(pending){const badge=document.createElement('span');badge.className='tech-pending-badge';badge.textContent=pt(pending)+' aguardando aceite';left.append(badge)}
+  const count=document.createElement('span');count.className='tech-count';count.textContent=pt((technicianInventories.get(t.id)||[]).length);button.append(left,count);button.addEventListener('click',()=>{selectedTechnicianId=t.id;$('technicianMaterialSearch').value='';renderTechnicians()});target.append(button)}
   if(!filtered.length){const div=document.createElement('div');div.className='empty';div.textContent='Nenhum técnico encontrado.';target.append(div)}
   $('techFoot').textContent=`${filtered.length} de ${technicianList.length} técnico(s) listados · Total na carga: ${pt(allTechSerials.length)} seriais.`;
 }
@@ -1242,6 +1301,7 @@ function setOperationalPositions(entries,source,reference,persisted){
  opsPositions=(entries||[]).map(r=>({numero_serie:cleanSerial(r.numero_serie||r.serial),situacao:r.situacao||r.tipo,codigo_sap:displaySap(r.codigo_sap||r.sap||''),login_conect:String(r.login_conect||r.login||'').toUpperCase(),tecnico_nome:r.tecnico_nome||r.tecnico||''}));
  opsSource=source;opsReference=reference||'';opsCurrentFromDB=!!persisted;
  renderOperations();overviewRefresh();
+ if(technicianList.length)renderTechnicians();
 }
 function renderOpsFromPreview(){
  const groups=['no_estoque','com_tecnico','confirmacao'];
