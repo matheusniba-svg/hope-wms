@@ -255,6 +255,17 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="ops-explainer"><strong>Dados ainda necessários para automatizar todo o fluxo:</strong> relatórios históricos BAIXADOS/INSTALADOS com técnico, data, OS e contrato; Matriz atualizada no mesmo dia; planilha de abastecimento com SAP, quantidade, nota fiscal e previsão de chegada. Sem essas fontes, os rankings, divergências e coberturas são classificados como incompletos.</div>
 </section>
 
+<section class="panel" id="wmsBatchPanel" aria-labelledby="wmsBatchTitle">
+ <div class="section-top"><div><h2 id="wmsBatchTitle">Atualização simplificada · selecionar todas as planilhas</h2><small>Uma seleção de arquivos; conferência e gravação continuam separadas para evitar duplicações.</small></div><span class="status-chip warning">Somente administrador</span></div>
+ <div class="import-drop">
+  <label for="wmsBatchFiles"><strong>Escolher relatórios do dia (Conect, Matriz/NAtlas, NNE ou Analítico)</strong></label>
+  <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Selecionar os relatórios do dia em lote" />
+  <small class="import-muted">Escolha todos os arquivos juntos com Ctrl+A na pasta, ou selecione apenas os necessários. O HOPE identifica os nomes e encaminha às conferências que já existem. Arquivos incompatíveis são sinalizados; nada é gravado nesta seleção.</small>
+ </div>
+ <div id="wmsBatchStatus" class="import-status" role="status" aria-live="polite" style="white-space:pre-line">Selecione as planilhas do dia. Primeiro confira e confirme o Conect; depois confirme a fotografia diária para calcular as médias.</div>
+ <p class="helper">Fluxo: <a href="#importPanel">1. Conferir/confirmar Conect</a> → <a href="#dailyImportPanel">2. Conferir/confirmar NAtlas diário</a>. Abastecimento NNE e Analítico são opcionais. A Matriz histórica não será sobrescrita automaticamente.</p>
+</section>
+
 <section class="panel" id="importPanel" aria-labelledby="importTitle">
  <div class="section-top"><div><h2 id="importTitle">Atualização do Conect — conferência e envio</h2><small>Conferência obrigatória antes do envio, com histórico de alterações no Supabase.</small></div><span class="status-chip warning">Somente administrador</span></div>
  <div class="import-drop"><label for="conectFiles"><strong>Selecionar relatórios de Campo Grande (.xlsx)</strong></label>
@@ -1617,6 +1628,67 @@ async function dailyLoad(){
 }
 $('dailySearch').addEventListener('input',dailyRender);
 document.addEventListener('wms-baseline-loaded',dailyLoad);
+
+
+// Seleção única: apenas distribui arquivos aos validadores já existentes.
+// Não chama RPC nem grava dados; cada etapa conserva o botão de confirmação.
+function wmsBatchDate(filename){
+ const m=String(filename).match(/(20\d{2})[-_ ]?([01]\d)[-_ ]?([0-3]\d)(?!\d)/);
+ if(!m)return null;
+ const date=m[1]+'-'+m[2]+'-'+m[3];
+ const d=new Date(date+'T12:00:00Z');
+ return Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==date?null:date;
+}
+function wmsBatchClassification(file){
+ const n=String(file.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ const ext=n.split('.').at(-1);
+ const conect=idOfFile(file.name);
+ if(conect)return {group:'conect',kind:conect,ok:ext==='xlsx'};
+ if(n.includes('relatorio_equipamentos_analitico')||n.includes('relatorio equipamentos analitico'))
+  return {group:'analitico',ok:['xls','html','htm'].includes(ext)};
+ if(n.startsWith('nne_')||n.startsWith('nne-'))return {group:'nne',ok:ext==='xlsx'};
+ if(n.includes('baixados assinantes')||n.includes('inicializados matriz cgde')||n.includes('natlas_relatorio_posicao_equipamento'))
+  return {group:'diario',ok:ext==='xlsx',legacy:ext==='xls'};
+ return {group:'desconhecido',ok:false};
+}
+function wmsBatchSetInput(id,files){
+ const t=new DataTransfer();files.forEach(f=>t.items.add(f));const target=$(id);
+ target.files=t.files;
+ target.dispatchEvent(new Event('change',{bubbles:true}));
+}
+$('wmsBatchFiles').addEventListener('change',e=>{
+ const files=Array.from(e.target.files||[]);
+ const status=$('wmsBatchStatus');
+ if(!files.length){status.textContent='Nenhum arquivo selecionado.';return}
+ const groups={conect:new Map(),diario:[],nne:[],analitico:[]},warnings=[];
+ for(const file of files){
+  const type=wmsBatchClassification(file);
+  if(type.group==='desconhecido'){warnings.push('Não reconhecido: '+file.name);continue}
+  if(!type.ok){warnings.push((type.legacy?'XLS antigo não suportado no cruzamento diário; obtenha o relatório completo em XLSX: ':'Formato incompatível: ')+file.name);continue}
+  if(type.group==='conect'){
+   if(groups.conect.has(type.kind))warnings.push('Relatório Conect repetido: '+file.name);
+   else groups.conect.set(type.kind,file);
+  }else groups[type.group].push(file);
+ }
+ const dates=[...new Set(files.filter(f=>wmsBatchClassification(f).group!=='desconhecido').map(f=>wmsBatchDate(f.name)).filter(Boolean))];
+ if(dates.length>1){status.textContent='Não foi possível preparar este lote: os nomes indicam dias diferentes ('+dates.join(', ')+'). Selecione só os arquivos da mesma fotografia.';return}
+ if(dates.length===1){
+  for(const id of ['conectReferencia','dailyDate','wmsNneDate','wmsAnaliticoDate']){
+   if($(id))$(id).value=dates[0];
+  }
+ }
+ const daily=groups.diario;
+ if(daily.length>1)warnings.push('Há mais de um candidato a NAtlas/Matriz diária. Foi selecionado apenas '+daily[0].name+' para a prévia. Confira se é a fotografia COMPLETA antes de confirmar.');
+ if(groups.nne.length>1)warnings.push('Mais de um arquivo NNE: usando apenas o primeiro.');
+ if(groups.analitico.length>1)warnings.push('Mais de um Analítico: usando apenas o primeiro.');
+ if(groups.conect.size)wmsBatchSetInput('conectFiles',[...groups.conect.values()]);
+ if(daily.length)wmsBatchSetInput('dailyFile',[daily[0]]);
+ if(groups.nne.length)wmsBatchSetInput('wmsNneFile',[groups.nne[0]]);
+ if(groups.analitico.length)wmsBatchSetInput('wmsAnaliticoFile',[groups.analitico[0]]);
+ const found=['Conect: '+groups.conect.size+'/6 relatórios','NAtlas/Matriz diária: '+(daily.length?'prévia em processamento':'não selecionado'),'NNE: '+(groups.nne.length?'prévia em processamento':'opcional'),'Analítico: '+(groups.analitico.length?'prévia em processamento':'opcional')];
+ if(groups.conect.size>0&&groups.conect.size<6)warnings.push('Faltam '+(6-groups.conect.size)+' relatórios do Conect. O envio não será liberado sem os seis.');
+ status.textContent='Arquivos selecionados: '+files.length+(dates.length===1?' · data sugerida: '+dates[0]:' · confira as datas manualmente')+'\n'+found.join('\n')+'\nNenhuma informação foi enviada ao Supabase.\n'+(warnings.length?'\nAtenção:\n• '+warnings.join('\n• '):'Confira as prévias e confirme cada etapa na ordem indicada.');
+});
 
 </script>
 </body>
