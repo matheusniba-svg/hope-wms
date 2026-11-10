@@ -249,6 +249,25 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .tech-access-table-wrap table{width:100%;min-width:410px;border-collapse:collapse}
 .tech-access-table-wrap td,.tech-access-table-wrap th{border-bottom:1px solid #385365;padding:8px;font-size:11px;text-align:left}
 .tech-access-table-wrap td:last-child{font-family:ui-monospace,monospace;letter-spacing:.7px;color:#8becce;font-weight:800}
+
+/* Estoque operacional inspirado na planilha, com detalhes apenas sob demanda */
+#operationalPanel .wms-simple-stock{max-width:1080px;width:100%}
+#operationalPanel .wms-simple-stock table{table-layout:fixed;min-width:760px}
+#operationalPanel .wms-simple-stock th:first-child{width:29%}
+#operationalPanel .wms-simple-stock th:not(:first-child){width:11.8%}
+#operationalPanel .wms-simple-stock td,#operationalPanel .wms-simple-stock th{padding:10px 9px;font-size:11px}
+#operationalPanel .wms-stock-extra[hidden]{display:none}
+#operationalPanel .wms-stock-extra td{padding:6px 12px;text-align:left}
+#operationalPanel .wms-stock-extra-content{padding:10px 13px;border-left:3px solid #56d6b2;background:#102c39;color:#c6dbe5;font-size:12px}
+#operationalPanel .wms-stock-extra-content p{margin:5px 0}
+#operationalPanel .wms-serial-preview{font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+.wms-supply-upload{border:1px solid #30546b;background:#0c2032;padding:14px;border-radius:12px;margin:10px 0 14px}
+.wms-supply-intro{display:grid;gap:4px;font-size:12px}
+.wms-supply-intro span{font-size:11px;color:#a6c5d5}
+.wms-supply-inputs{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.wms-supply-inputs label{font-size:11px;display:grid;gap:6px;flex:1;min-width:200px}
+.wms-supply-inputs input{border:1px solid #375569;border-radius:7px;padding:9px;font-size:11px;max-width:100%}
+.wms-supply-note{font-size:11px;color:#bad0db;margin:4px 0;line-height:1.6}
 </style>
 </head>
 <body class="wms-locked">
@@ -345,8 +364,16 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="ops-explainer wms-easy-note" id="opsLimit">Os saldos vêm do Conect. Não representam contagem física.</div>
  <div id="wmsStockDetails" hidden>
  <div class="section-top"><div><strong class="mini">Quantidade por equipamento</strong><div class="section-note">Posição atual de cada modelo no Conect.</div></div><div class="filters"><input id="opsSearch" class="search" placeholder="Buscar modelo ou equipamento" aria-label="Buscar modelo na operação"/><select id="opsSort" aria-label="Ordenar visão operacional"><option value="stock">Maior estoque</option><option value="low">Menor estoque</option><option value="sap">Modelo (A–Z)</option></select></div></div>
- <div class="tablebox"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Com técnicos</th><th class="num">A confirmar</th><th class="num">Total</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="5">Aguardando Conect.</td></tr></tbody></table></div>
- <div class="section-note" id="opsFooter">Para consultar consumo e autonomia, use o botão acima.</div>
+ <div class="wms-supply-upload">
+  <div class="wms-supply-intro"><strong>Abastecimento e conferência</strong><span>Consumo: NAtlas ASSINANTE · Saldo Atlas: INICIALIZADO Procisa · Entregas: Planejamento</span></div>
+  <div class="wms-supply-inputs">
+   <label>1. Atlas completo (saldo Procisa)<input id="wmsAtlasFullFile" type="file" accept=".xlsx" /></label>
+   <label>2. Planejamento de abastecimento<input id="wmsSupplyPlanFile" type="file" accept=".xlsx" /></label>
+  </div>
+  <p id="wmsSupplyStatus" class="wms-supply-note" role="status">Envie as fontes para cruzar o que entrou no Atlas e o que ainda não foi entregue. Se tiver um Excel com as abas ATLAS e PLANEJAMENTO, pode selecionar o mesmo arquivo nos dois campos.</p>
+ </div>
+ <div class="tablebox wms-simple-stock"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Consumo D-1</th><th class="num">Autonomia</th><th class="num">Em trânsito</th><th class="num">Atlas Procisa</th><th class="num">A conferir</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="7">Aguardando Conect.</td></tr></tbody></table></div>
+ <div class="section-note" id="opsFooter">Clique em um equipamento para ver os técnicos, confirmações e a origem das pendências. “A conferir” não é dívida nem entrada confirmada.</div>
  <details class="ops-details wms-extra-data" id="opsExtraDetails"><summary>Outras consultas e ferramentas (opcional)</summary><details class="ops-details"><summary>Conferir seriais entre relatórios</summary><p class="section-note">A lista é investigativa. Seriais que mudaram de posição entre datas diferentes não são automaticamente divergências ou perdas.</p><div id="opsSerialDiff" class="ops-serials">Aguardando dados.</div></details>
  <div class="ops-split">
   <div class="ops-subpanel"><h3>Equipamentos mais consumidos</h3><p class="section-note">Somente seriais instalados registrados no NAtlas; não confundir com retirada de carga.</p><div id="opsTopItems" class="ops-short">Ainda não há leitura do NAtlas.</div></div>
@@ -1404,6 +1431,153 @@ function opsOriginalMatrix(){const result=new Map();for(const r of rows){const m
 function opsInstallationCounts(){const g=new Map(),days=new Set();for(const i of installationRecords){const d=dateForCG(i.data_instalacao);if(d)days.add(d);const modelo=nomeModeloMaterial(i.material_id);g.set(modelo,(g.get(modelo)||0)+1)}return {g,days};}
 
 function opsLine(label,value){const row=document.createElement('div');row.className='ops-line';const left=document.createElement('span');left.textContent=label;const right=document.createElement('b');right.textContent=value;row.append(left,right);return row;}
+
+// Fontes distintas: NAtlas ASSINANTE alimenta consumo; Atlas completo alimenta saldo;
+// Planejamento alimenta trânsito. O cruzamento é uma prévia local, sem baixar nem aumentar estoque.
+let wmsAtlasFull=null,wmsSupplyPlan=null;
+async function wmsNamedSheetRows(file,sheetName){
+ if(!file||file.size>23e6)throw Error('Escolha um XLSX válido com até 23 MB.');
+ const {read,names}=zipCatalog(await file.arrayBuffer());
+ const b=await read('xl/workbook.xml'),rels=await read('xl/_rels/workbook.xml.rels');
+ if(!b||!rels)throw Error('O arquivo não contém um Excel válido.');
+ const doc=xmlDoc(b),rdoc=xmlDoc(rels);
+ const sheet=elements(doc,'sheet').find(x=>wmsNorm(x.getAttribute('name'))===wmsNorm(sheetName));
+ if(!sheet)throw Error('A aba '+sheetName+' não foi encontrada nesse Excel.');
+ const rid=sheet.getAttribute('r:id')||sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+ const relationship=elements(rdoc,'Relationship').find(x=>x.getAttribute('Id')===rid);
+ if(!relationship)throw Error('Não foi possível encontrar a aba '+sheetName+'.');
+ const target=relationship.getAttribute('Target')||'';
+ const path=target.startsWith('/')?target.replace(/^\/+/,''):'xl/'+target.replace(/^\.\//,'').replace(/^xl\//,'');
+ const data=await read(path);
+ if(!data)throw Error('Não foi possível ler '+sheetName+'.');
+ const sharedXml=await read('xl/sharedStrings.xml');
+ let shared=[];
+ if(sharedXml){const xml=xmlDoc(sharedXml);shared=elements(xml,'si').map(v=>elements(v,'t').map(t=>t.textContent||'').join(''))}
+ const out=[],rowrx=/<row\b([^>]*)>([\s\S]*?)<\/row>/g;
+ let match;
+ while((match=rowrx.exec(data))!==null){
+  const line=Number(/\br="(\d+)"/.exec(match[1])?.[1]||0),row=[];
+  const crx=/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;let cm;
+  while((cm=crx.exec(match[2]))!==null){
+   const addr=/\br="([A-Z]+)\d+"/.exec(cm[1])?.[1],i=fromExcelColumn(addr||'');
+   if(i<0||i>40)continue;
+   const type=/\bt="([^"]+)"/.exec(cm[1])?.[1],body=cm[2]||'';
+   let value=/<v>([\s\S]*?)<\/v>/.exec(body)?.[1]||'';
+   if(type==='s')value=shared[Number(value)]??'';
+   if(type==='inlineStr')value=/<t[^>]*>([\s\S]*?)<\/t>/.exec(body)?.[1]||'';
+   row[i]=String(value).trim().replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+  }
+  if(row.some(x=>x))out.push({line,row});
+ }
+ return out;
+}
+function wmsTabColumn(headers,alternatives){
+ for(const n of alternatives){const i=headers.indexOf(wmsNorm(n));if(i>=0)return i;}
+ return -1;
+}
+function wmsSupplyAtlasParse(rows){
+ const at=rows.findIndex(x=>x.row.map(wmsNorm).some(v=>v==='ESTADO')&&x.row.map(wmsNorm).some(v=>v==='OPERACAO'));
+ if(at<0)throw Error('Aba ATLAS sem colunas Estado e Operação.');
+ const heads=rows[at].row.map(wmsNorm), ix={
+  sap:wmsTabColumn(heads,['Código Material SAP','Material SAP']),
+  serial:wmsTabColumn(heads,['Número Série','Série / Ender. Princ.']),
+  local:wmsTabColumn(heads,['Nome do Local','Local']),
+  state:wmsTabColumn(heads,['Estado']),
+  operation:wmsTabColumn(heads,['Operação']),
+  date:wmsTabColumn(heads,['Data Última Alteração','Data da Alteração'])
+ };
+ if(Object.values(ix).some(n=>n<0))throw Error('Faltam colunas de serial, local, SAP ou data no Atlas.');
+ const unique=new Set(),data=[];
+ for(const r of rows.slice(at+1)){
+  const get=k=>String(r.row[ix[k]]||'').trim(),op=wmsNorm(get('operation')),local=wmsNorm(get('local')),state=wmsNorm(get('state'));
+  if(!op.includes('CAMPO GRANDE')||!local.includes('PROCISA')||state!=='INICIALIZADO')continue;
+  const serial=cleanSerial(get('serial')),sap=displaySap(get('sap')),date=wmsExcelInstalacao(get('date'));
+  if(!serial||!sap||serial.length>100||/E[+-]\d+$/i.test(serial)||unique.has(serial))continue;
+  unique.add(serial);data.push({serial,sap,date});
+ }
+ if(!data.length)throw Error('Nenhum INICIALIZADO Procisa Campo Grande encontrado. Confira se selecionou o Atlas correto.');
+ return data;
+}
+function wmsSupplyPlanParse(rows){
+ const at=rows.findIndex(x=>x.row.map(wmsNorm).includes('STATUS_NF')&&x.row.map(wmsNorm).includes('QUANTIDADE'));
+ if(at<0)throw Error('Aba PLANEJAMENTO sem STATUS_NF ou QUANTIDADE.');
+ const head=rows[at].row.map(wmsNorm),ix={
+  sap:wmsTabColumn(head,['MATERIAL','Código Material SAP']),
+  qty:wmsTabColumn(head,['QUANTIDADE']),
+  status:wmsTabColumn(head,['STATUS_NF']),
+  cd:wmsTabColumn(head,['CD']),
+  delivery:wmsTabColumn(head,['DT_ENTREGA_REALIZADA']),
+  nf:wmsTabColumn(head,['NF_CORRIGIDA']),
+  reserve:wmsTabColumn(head,['RESERVA'])
+ };
+ if(ix.sap<0||ix.qty<0||ix.status<0||ix.cd<0)throw Error('Planejamento sem código SAP, quantidade, CD ou situação.');
+ const out=[],keys=new Set();
+ for(const r of rows.slice(at+1)){
+  const get=k=>ix[k]<0?'':String(r.row[ix[k]]||'').trim(),cd=wmsNorm(get('cd')),status=wmsNorm(get('status')),delivered=wmsNorm(get('delivery'));
+  if(!cd.includes('CAMPO GRANDE')||!status.includes('TRANSITO')||delivered&&delivered!=='-'&&delivered!=='0')continue;
+  const sap=displaySap(get('sap')),qty=wmsNum(get('qty'));
+  if(!sap||!Number.isSafeInteger(qty)||qty<=0)continue;
+  const nf=get('nf'),reserve=get('reserve'),key=[sap,nf,reserve,r.line].join('|');
+  if(keys.has(key))continue;keys.add(key);
+  out.push({sap,qty,nf,reserve});
+ }
+ return out;
+}
+function wmsSupplyD1Counts(reference){
+ if(!reference)return null;
+ const d1=wmsDateOffset(reference,-1);
+ const selected=typeof dailyCandidate!=='undefined'?dailyCandidate:null;
+ const canUseFile=selected?.file?.name&&wmsBatchDate(selected.file.name)===reference&&selected.linhas?.length;
+ const unique=new Map();
+ if(canUseFile){
+  for(const x of selected.linhas){
+   if(x.local!=='ASSINANTE'||x.tipo_local!=='ASSINANTE'||x.data_instalacao!==d1)continue;
+   unique.set(cleanSerial(x.serial),{sap:x.sap,date:d1});
+  }
+ }else if(dailyLatestReference&&dailyLatestReference>=reference){
+  for(const x of natlasBaixas){
+   const date=dateForCG(x.data_ultima_alteracao_local);
+   if(date===d1)unique.set(cleanSerial(x.numero_serie),{sap:x.codigo_sap||byMaterialIndex.get(String(x.material_id))?.codigo_sap,date});
+  }
+  for(const x of dailyEvents){
+   if(dateForCG(x.data_instalacao)===d1)unique.set(cleanSerial(x.numero_serie),{sap:x.codigo_sap,date:d1});
+  }
+ }else return null;
+ const modelCounts=new Map();
+ for(const [serial,x] of unique){
+  if(!serial||!x.sap)continue;
+  const model=nomeModeloSap(x.sap);
+  modelCounts.set(model,(modelCounts.get(model)||0)+1);
+ }
+ return modelCounts;
+}
+function wmsSupplyRenderStatus(){
+ const atlas=wmsAtlasFull,plan=wmsSupplyPlan,ref=opsReference||'não informada';
+ const atlasCount=atlas?.rows.length,planCount=plan?.rows.length;
+ $('wmsSupplyStatus').textContent='Conect: '+ref+' · '+
+  (atlas?'Atlas Procisa: '+pt(atlasCount)+' seriais inicializados ('+atlas.file+')':'Atlas Procisa: não enviado')+' · '+
+  (plan?'Planejamento: '+pt(planCount)+' linhas não entregues ('+plan.file+')':'Planejamento: não enviado')+
+  '. Prévia local, não altera o Supabase. Igualdade de SAP e quantidade sugere conferência, mas não prova que a carga chegou.';
+}
+$('wmsAtlasFullFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];wmsAtlasFull=null;
+ if(!file){wmsSupplyRenderStatus();renderOperations();return;}
+ $('wmsSupplyStatus').textContent='Lendo Atlas...';
+ try{const rows=await wmsNamedSheetRows(file,'ATLAS');
+  wmsAtlasFull={file:file.name,rows:wmsSupplyAtlasParse(rows)};
+ }catch(err){$('wmsSupplyStatus').textContent='Atlas não conferido: '+String(err.message||err);renderOperations();return;}
+ wmsSupplyRenderStatus();renderOperations();
+});
+$('wmsSupplyPlanFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];wmsSupplyPlan=null;
+ if(!file){wmsSupplyRenderStatus();renderOperations();return;}
+ $('wmsSupplyStatus').textContent='Lendo planejamento...';
+ try{const rows=await wmsNamedSheetRows(file,'PLANEJAMENTO');
+  wmsSupplyPlan={file:file.name,rows:wmsSupplyPlanParse(rows)};
+ }catch(err){$('wmsSupplyStatus').textContent='Planejamento não conferido: '+String(err.message||err);renderOperations();return;}
+ wmsSupplyRenderStatus();renderOperations();
+});
+
 function renderOperations(){
  const counts={no_estoque:0,com_tecnico:0,confirmacao:0};
  for(const p of opsPositions){if(Object.hasOwn(counts,p.situacao))counts[p.situacao]++;}
@@ -1424,32 +1598,76 @@ function renderOperations(){
  if(countsExtra.length){for(const [label,n] of countsExtra){const el=document.createElement('span'),strong=document.createElement('strong');el.textContent=label+': ';strong.textContent=pt(n);el.append(strong);extras.append(el)}}
  else extras.textContent='Reversa e retirados ficam fora do saldo ativo. Os detalhes devem estar no HOPE após a carga inicial.';
  $('opsLimit').textContent=hasData?'Quantidades informadas pelo Conect, não uma contagem física.':'Selecione os arquivos em Atualizações para ver o estoque.';
- const raw=[...codeGroups.values()].map(g=>({...g,total:g.no_estoque+g.com_tecnico+g.confirmacao}));
+ const reference=opsReference||null;
+ const d1=wmsSupplyD1Counts(reference),atlas=wmsAtlasFull,plan=wmsSupplyPlan;
+ const recent=atlas&&reference?atlas.rows.filter(x=>x.date===reference):[];
+ const knownSerials=new Set(opsPositions.map(x=>cleanSerial(x.numero_serie)));
+ const pendingByModel=new Map();
+ for(const x of recent){
+  if(knownSerials.has(x.serial))continue;
+  const model=nomeModeloSap(x.sap);
+  if(!pendingByModel.has(model))pendingByModel.set(model,[]);
+  pendingByModel.get(model).push(x);
+ }
+ const atlasByModel=new Map(),planByModel=new Map();
+ if(atlas)for(const x of atlas.rows){const name=nomeModeloSap(x.sap);atlasByModel.set(name,(atlasByModel.get(name)||0)+1);}
+ if(plan)for(const x of plan.rows){const name=nomeModeloSap(x.sap);planByModel.set(name,(planByModel.get(name)||0)+x.qty);}
+ const union=new Map([...codeGroups].map(([k,g])=>[k,{...g}]));
+ for(const model of [...atlasByModel.keys(),...planByModel.keys()]){
+  if(!union.has(model))union.set(model,{code:model,no_estoque:0,com_tecnico:0,confirmacao:0,serials:[]});
+ }
+ const raw=[...union.values()].map(g=>({...g,total:g.no_estoque+g.com_tecnico+g.confirmacao}));
  const busca=$('opsSearch').value.toLocaleLowerCase('pt-BR').trim(),sort=$('opsSort').value;
  const list=raw.filter(g=>g.code.toLocaleLowerCase('pt-BR').includes(busca));
  list.sort((a,b)=>sort==='low'?a.no_estoque-b.no_estoque:sort==='sap'?a.code.localeCompare(b.code,'pt-BR'):b.no_estoque-a.no_estoque);
  const body=$('opsRows');body.replaceChildren();
  for(const g of list){
+  const installs=d1?.get(g.code),pending=pendingByModel.get(g.code)||[],planned=planByModel.get(g.code);
+  const days=installs>0?g.no_estoque/installs:null;
+  const atlasCount=atlasByModel.get(g.code);
   const tr=document.createElement('tr');
-  const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[pt(g.com_tecnico),'num'],[pt(g.confirmacao),'num'],[pt(g.total),'num']];
+  const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[d1===null?'—':pt(installs||0),'num'],
+   [days===null?'—':decimal(days)+' d','num'],
+   [plan===null?'—':pt(planned||0),'num'],[atlas===null?'—':pt(atlasCount||0),'num'],
+   [atlas===null||!reference?'—':pt(pending.length),'num']];
+  const detail=document.createElement('tr');detail.className='wms-stock-extra';detail.hidden=true;
+  const extra=document.createElement('td');extra.colSpan=7;
+  const note=document.createElement('div');note.className='wms-stock-extra-content';
+  const tips=[
+   'Com técnicos: '+pt(g.com_tecnico)+' · Aguardando aceite: '+pt(g.confirmacao)+
+      ' · Total no Conect: '+pt(g.total),
+   'Atlas Procisa: '+(atlas===null?'não enviado':pt(atlasCount||0)+' seriais INICIALIZADOS'),
+   'Inicializados na data '+(reference||'sem referência')+' sem correspondente no Conect: '+(atlas===null?'não conferido':pt(pending.length)),
+   'Planejamento não entregue: '+(plan===null?'não enviado':pt(planned||0)+' unidades'),
+   pending.length&&planned?'ATENÇÃO: há quantidade possivelmente compatível com o planejamento, mas precisamos de NF, reserva ou confirmação de recebimento para vincular a carga.':'Correspondência por SAP e quantidade não comprova entrega.'
+  ];
+  for(const line of tips){const x=document.createElement('p');x.textContent=line;note.append(x);}
+  if(pending.length){
+   const link=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Ver seriais novos sem registro no Conect ('+pending.length+')';
+   link.append(summary);const listEl=document.createElement('div');listEl.className='wms-serial-preview';
+   listEl.textContent=pending.slice(0,50).map(x=>x.serial+' · SAP '+x.sap).join('   |   ')+(pending.length>50?' · mais '+(pending.length-50)+' seriais':'');
+   link.append(listEl);note.append(link);
+  }
+  extra.append(note);detail.append(extra);
   for(let j=0;j<cells.length;j++){
    const [value,cl]=cells[j],td=document.createElement('td');td.className=cl;
    if(j===0){
-    const button=document.createElement('button');button.className='ops-sapbutton';button.textContent=value;
-    button.title='Conferir seriais deste equipamento';
+    const button=document.createElement('button');button.type='button';button.className='ops-sapbutton';
+    button.textContent=(detail.hidden?'+ ':'− ')+value;
+    button.setAttribute('aria-expanded','false');
     button.addEventListener('click',()=>{
-     $('opsExtraDetails').open=true;renderOpsSerialDetails(g.code);
-     const detail=document.querySelector('#opsExtraDetails .ops-details');
-     if(detail){detail.open=true;detail.scrollIntoView({behavior:'smooth',block:'nearest'});}
+     detail.hidden=!detail.hidden;button.textContent=(detail.hidden?'+ ':'− ')+value;
+     button.setAttribute('aria-expanded',String(!detail.hidden));
     });
     td.append(button);
    }else td.textContent=value;
    tr.append(td);
   }
-  body.append(tr);
+  body.append(tr,detail);
  }
- if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
- $('opsFooter').textContent=pt(list.length)+' equipamento(s). Para consumo e autonomia, clique no botão acima.';
+ if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
+ $('opsFooter').textContent='Conect '+(reference||'sem data')+' · Consumo do dia anterior'+(d1===null?' ainda não confirmado.':'.')+
+  ' · Em trânsito vem do planejamento e não é somado ao estoque. Valores a conferir não são dívida comprovada.';
  renderOpsSerialDetails(null);renderOpsRankings();renderOpsKitSelectors();
 }
 function renderOpsSerialDetails(code){
