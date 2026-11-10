@@ -343,6 +343,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div id="wmsBatchStatus" class="import-status" role="status" aria-live="polite" style="white-space:pre-line">Selecione os relatórios. Nenhum dado será alterado antes da confirmação.</div>
  <div class="import-actions wms-batch-actions">
   <button class="btn" id="wmsBatchSubmit" type="button" disabled>3. Confirmar atualização Conect + NAtlas</button>
+  <button class="btn-ghost" id="wmsBatchOnlyNatlas" type="button" disabled>Atualizar somente NAtlas</button>
   <button class="btn-ghost" id="wmsBatchNneSave" type="button" disabled>Salvar NNE (opcional)</button>
   <button class="btn-ghost" id="wmsBatchAdvanced" type="button" aria-expanded="false">Mostrar detalhes avançados</button>
  </div>
@@ -1820,6 +1821,9 @@ function wmsBatchRefresh(){
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
  const ready=c===6&&cv===''&&!!d&&!!authSession?.access_token&&!!$('wmsBatchComplete').checked&&!!date&&!unmatched&&!wmsBatchBusy;
  $('wmsBatchSubmit').disabled=!ready;
+ // Permite concluir NAtlas quando o Conect dessa mesma data já foi gravado.
+ const latestConectDate=opsCurrentFromDB?opsReference:null;
+ $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&date===dated&&latestConectDate===date&&!wmsBatchBusy&& !sel.warnings.some(w=>/datas diferentes|duplicado|incompatível/.test(w)));
  $('wmsBatchNneSave').disabled=!n||!!n.invalid||!authSession?.access_token||wmsBatchBusy;
  let main=ready?'Pronto: os dois relatórios podem ser registrados após sua confirmação.':c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
  if(unmatched)main='A data informada não corresponde ao nome do NAtlas ('+dated+'). Corrija antes de continuar.';
@@ -1867,6 +1871,21 @@ $('wmsBatchAdvanced').addEventListener('click',()=>{
 for(const id of ['importStatus','dailyPreview','wmsNnePreview','conectCommitMessage','dailyMsg']){
  new MutationObserver(()=>wmsBatchRefresh()).observe($(id),{subtree:true,childList:true,characterData:true});
 }
+$('wmsBatchOnlyNatlas').addEventListener('click',async()=>{
+ const date=$('wmsBatchDateInput').value,sel=wmsBatchSelection;
+ if(wmsBatchBusy||!dailyCandidate||!sel.diario||!authSession?.access_token||!$('wmsBatchComplete').checked||!opsCurrentFromDB||opsReference!==date||wmsBatchDate(sel.diario.name)!==date)return;
+ if(sel.warnings.some(w=>/datas diferentes|duplicado|incompatível/.test(w)))return;
+ if(!window.confirm('Importar SOMENTE NAtlas '+date+'? O Conect dessa data já foi registrado. Serão cruzados os seriais e as datas da coluna P, sem reenviar a posição Conect.'))return;
+ wmsBatchBusy=true;$('wmsBatchOnlyNatlas').disabled=true;
+ $('dailyDate').value=date;$('dailyComplete').checked=true;
+ try{
+  $('wmsBatchProgress').textContent='Importando apenas NAtlas '+date+'...';
+  const result=await wmsCommitDaily();
+  $('wmsBatchProgress').textContent='NAtlas '+date+': '+(result?.resultado==='ja_importado'?'já importado, sem duplicação.':pt(result?.novas||0)+' novos seriais identificados. ')+'Conferir agora o consumo D-1 no resumo.';
+  if(wmsModal.open)wmsGeneralRender();
+ }catch(error){$('wmsBatchProgress').textContent='NAtlas NÃO importado: '+String(error.message||error)+'. A importação do Conect permanece intacta. Confira o erro antes de tentar novamente.'}
+ finally{wmsBatchBusy=false;wmsBatchRefresh()}
+});
 $('wmsBatchNneSave').addEventListener('click',()=>{
  if(!wmsFontes.nne||wmsFontes.nne.invalid)return;
  $('wmsNneSave').click();
