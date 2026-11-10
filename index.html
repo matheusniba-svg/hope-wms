@@ -238,6 +238,17 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .tech-situation-tag{display:inline-block;border:1px solid #a77b3d;background:#372b1d;color:#f4c580;border-radius:12px;padding:4px 9px;margin-top:5px;font-size:11px;font-weight:700}
 .tech-situation-tag.is-departed{border-color:#835367;background:#3a2634;color:#f0b7c6}
 @media(max-width:750px){.tech-manager-layout{grid-template-columns:1fr}.tech-manager-items{max-height:230px}}
+.tech-access-panel{margin-top:20px;border:1px solid #3c6474;border-radius:13px;padding:14px;background:#102a39}
+.tech-access-panel-head{display:grid;gap:3px}
+.tech-access-panel-head strong{color:#79ebc4;font-size:14px}
+.tech-access-panel-head small{color:#afc8d6;font-size:11px}
+.tech-access-result{border-top:1px solid #345467;padding-top:11px;margin-top:15px}
+.tech-access-result[hidden]{display:none!important}
+.tech-access-warning{font-size:11px;line-height:1.5;color:#efd0a1}
+.tech-access-table-wrap{overflow:auto;max-height:280px}
+.tech-access-table-wrap table{width:100%;min-width:410px;border-collapse:collapse}
+.tech-access-table-wrap td,.tech-access-table-wrap th{border-bottom:1px solid #385365;padding:8px;font-size:11px;text-align:left}
+.tech-access-table-wrap td:last-child{font-family:ui-monospace,monospace;letter-spacing:.7px;color:#8becce;font-weight:800}
 </style>
 </head>
 <body class="wms-locked">
@@ -561,6 +572,19 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
    <div class="tech-manager-actions">
     <button id="techManageSave" class="btn" type="button">Salvar técnico</button>
     <button id="techManageArchive" class="btn-ghost" type="button" hidden>Desligar técnico</button>
+   </div>
+   <div class="tech-access-panel">
+    <div class="tech-access-panel-head"><strong>Acesso ao portal</strong><small>Login Z e senha individual de 8 caracteres</small></div>
+    <div class="tech-manager-actions">
+      <button id="techAccessOne" class="btn-ghost" type="button" disabled>Selecione um técnico</button>
+      <button id="techAccessBulk" class="btn-ghost" type="button">Gerar acessos pendentes (todos)</button>
+    </div>
+    <div id="techAccessResult" class="tech-access-result" hidden>
+      <p id="techAccessInfo" role="status"></p>
+      <p class="tech-access-warning">As senhas só aparecem agora. Copie ou baixe e guarde em local seguro. Ao fechar, será necessário redefinir para vê-las novamente.</p>
+      <div class="tech-access-table-wrap"><table><thead><tr><th>Técnico</th><th>Login Z</th><th>Senha</th></tr></thead><tbody id="techAccessRows"></tbody></table></div>
+      <div class="tech-manager-actions"><button id="techAccessCopy" type="button" class="btn-ghost">Copiar credenciais</button><button id="techAccessDownload" type="button" class="btn-ghost">Baixar CSV</button></div>
+    </div>
    </div>
    <p id="techManageMessage" class="section-note" role="status" aria-live="polite"></p>
   </div>
@@ -2274,6 +2298,91 @@ function wmsGeneralRender(){
 const TECH_STATUS_LABELS={ativo:'Ativo',ferias:'Férias',atestado:'Atestado',afastado:'Afastado',desligado:'Desligado'};
 function techManageStatusText(s){return TECH_STATUS_LABELS[s]||'Não informado'}
 const techManagerModal=$('techManageModal');
+let techAccessLinked=new Map(),techAccessSecrets=[];
+function techAccessForget(){
+ techAccessSecrets=[];
+ $('techAccessRows').replaceChildren();
+ $('techAccessResult').hidden=true;
+}
+function techAccessUpdateButton(){
+ const id=$('techManageId').value, t=technicianList.find(x=>x.id===id), b=$('techAccessOne');
+ b.disabled=!t||t.situacao==='desligado';
+ b.textContent=!t?'Selecione um técnico':techAccessLinked.has(id)?'Redefinir senha':'Criar acesso';
+}
+async function techAccessRequest(acao,techId){
+ await ensureAccess();
+ const call=()=>fetch(config.url+'/functions/v1/wms-tecnico-acessos',{
+  method:'POST',
+  headers:{apikey:config.key,Authorization:'Bearer '+config.token,'Content-Type':'application/json'},
+  body:JSON.stringify({acao,tecnico_id:techId||null})
+ });
+ let res=await call();
+ if(res.status===401&&authSession?.refresh_token){await renewSession();res=await call()}
+ let data=null;try{data=await res.json()}catch{throw Error('Não foi possível consultar o serviço de login.')}
+ if(!res.ok||data?.erro)throw Error(data?.erro||data?.message||'Erro de acesso '+res.status);
+ return data;
+}
+async function techAccessRefresh(){
+ const result=await techAccessRequest('status');
+ techAccessLinked=new Map((result.acessos||[]).map(x=>[String(x.tecnico_id),x.ativo]));
+ techAccessUpdateButton();
+}
+function techAccessShow(rows,info){
+ techAccessSecrets=rows.filter(x=>x.senha).map(x=>({nome:x.nome,login:x.login,senha:x.senha}));
+ const target=$('techAccessRows');target.replaceChildren();
+ $('techAccessInfo').textContent=info+(techAccessSecrets.length?' · '+techAccessSecrets.length+' senha(s) gerada(s)':'');
+ $('techAccessResult').hidden=false;
+ for(const row of techAccessSecrets){
+  const tr=document.createElement('tr');
+  for(const field of ['nome','login','senha']){
+   const td=document.createElement('td');td.textContent=row[field];tr.append(td);
+  }
+  target.append(tr);
+ }
+ $('techAccessCopy').disabled=$('techAccessDownload').disabled=techAccessSecrets.length===0;
+}
+function techAccessText(){
+ return techAccessSecrets.map(x=>x.login+'  |  '+x.senha+'  |  '+x.nome).join('\n');
+}
+$('techAccessCopy').addEventListener('click',async()=>{
+ if(!techAccessSecrets.length)return;
+ try{await navigator.clipboard.writeText(techAccessText());$('techAccessInfo').textContent='Credenciais copiadas. Compartilhe individualmente, não em grupos.'}
+ catch(e){$('techAccessInfo').textContent='Não foi possível copiar. Use o botão Baixar CSV.'}
+});
+$('techAccessDownload').addEventListener('click',()=>{
+ if(!techAccessSecrets.length)return;
+ const csv=String.fromCharCode(0xFEFF)+'Nome;Login Z;Senha\r\n'+techAccessSecrets.map(x=>[x.nome,x.login,x.senha].map(y=>'"'+String(y||'').replaceAll('"','""')+'"').join(';')).join('\r\n');
+ const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download='HOPE_Acessos_Tecnicos.csv';link.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+});
+$('techAccessOne').addEventListener('click',async()=>{
+ const id=$('techManageId').value,t=technicianList.find(x=>x.id===id);
+ if(!t||t.situacao==='desligado')return;
+ const reset=techAccessLinked.has(id);
+ if(reset&&!window.confirm('Redefinir a senha de '+t.name+' ('+t.login+')? A senha antiga deixará de funcionar.'))return;
+ const btn=$('techAccessOne');btn.disabled=true;
+ $('techManageMessage').textContent=reset?'Redefinindo senha...':'Criando acesso...';
+ try{
+  const response=await techAccessRequest(reset?'redefinir':'criar',Number(id));
+  techAccessShow([response],reset?'Senha redefinida. Entregue a nova senha apenas ao técnico.':'Acesso criado. Entregue a senha apenas ao técnico.');
+  await techAccessRefresh();
+  $('techManageMessage').textContent='Acesso atualizado.';
+ }catch(error){$('techManageMessage').textContent='Falha no acesso: '+String(error.message||error)}
+ finally{techAccessUpdateButton()}
+});
+$('techAccessBulk').addEventListener('click',async()=>{
+ if(!window.confirm('Gerar as senhas individuais dos técnicos que ainda não têm acesso?\n\nOs cadastros que já possuem login não serão modificados. Ao concluir, baixe ou copie a relação, porque as senhas não poderão ser consultadas novamente.'))return;
+ $('techAccessBulk').disabled=true;$('techManageMessage').textContent='Criando acessos dos técnicos sem login...';
+ try{
+  const result=await techAccessRequest('criar_lote');
+  techAccessShow(result.novos||[],(result.novos||[]).length+' acessos criados · '+(result.ignorados||[]).length+' já tinham acesso · '+(result.falhas||[]).length+' falha(s)');
+  await techAccessRefresh();
+  $('techManageMessage').textContent=(result.falhas||[]).length?'Alguns acessos não foram criados: '+result.falhas.map(x=>x.login+': '+x.erro).join(' | '):'Processo concluído. Não compartilhe o arquivo com outros técnicos.';
+ }catch(error){$('techManageMessage').textContent='Não foi possível concluir: '+String(error.message||error)}
+ finally{$('techAccessBulk').disabled=false}
+});
+techManagerModal.addEventListener('close',techAccessForget);
 function techManageReturnVisibility(){
  const show=['ferias','atestado','afastado'].includes($('techManageStatus').value);
  $('techManageReturnWrap').hidden=!show;
@@ -2294,6 +2403,7 @@ function techManageSelect(t){
  $('techManageMessage').textContent='';
  techManageReturnVisibility();
  techManageList();
+ techAccessUpdateButton();
 }
 function techManageList(){
  const search=$('techManageSearch').value.trim().toLocaleLowerCase('pt-BR'),status=$('techManageFilter').value;
@@ -2313,6 +2423,7 @@ function techManageList(){
 $('techManageOpen').addEventListener('click',()=>{
  $('techManageSearch').value='';$('techManageFilter').value='todos';techManageSelect(null);
  if(!techManagerModal.open)techManagerModal.showModal();
+ techAccessRefresh().catch(e=>{$('techManageMessage').textContent='Não foi possível conferir os acessos: '+e.message});
 });
 $('techManageClose').addEventListener('click',()=>techManagerModal.close());
 $('techManageNew').addEventListener('click',()=>{$('techManageFilter').value='todos';techManageSelect(null);$('techManageName').focus()});
@@ -2353,6 +2464,14 @@ async function techManageSave(forceDeparted=false){
   selectedTechnicianId=oldSelected;renderTechnicians();
   techManageSelect(technicianList.find(t=>t.id===String(saved.id))||null);
   $('techManageMessage').textContent=situacao==='desligado'?'Desligamento registrado. O histórico e os equipamentos permanecem para conferência.':'Cadastro salvo com sucesso.';
+  if(!id&&situacao!=='desligado'){
+   try{
+    const newAccess=await techAccessRequest('criar',Number(saved.id));
+    techAccessShow([newAccess],'Novo técnico cadastrado com acesso ao portal');
+    $('techManageMessage').textContent='Técnico cadastrado e senha individual criada.';
+   }catch(err){$('techManageMessage').textContent='Técnico cadastrado, mas não foi possível criar a senha: '+String(err.message||err)+'. Use Criar acesso para tentar novamente.'}
+  }
+  await techAccessRefresh().catch(()=>techAccessUpdateButton());
  }catch(error){$('techManageMessage').textContent='Não foi possível salvar: '+String(error.message||error)}
  finally{$('techManageSave').disabled=false;$('techManageArchive').disabled=false}
 }
