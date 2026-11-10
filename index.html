@@ -2006,9 +2006,13 @@ function wmsGeneralRender(){
   const full=document.createElement('td');full.colSpan=9;
   const caption=document.createElement('strong');caption.textContent='Instalações por data (coluna P do NAtlas):';full.append(caption);
   const daygrid=document.createElement('div');daygrid.className='wms-model-daygrid';
-  for(let i=0;i<6;i++){
-   const day=wmsDateOffset(start,i),n=g.events.filter(x=>x.day===day).length;
-   const chip=document.createElement('span');chip.textContent=wmsGenDateText(day).slice(0,5)+' · '+n;daygrid.append(chip);
+  if(start){
+   for(let i=0;i<6;i++){
+    const day=wmsDateOffset(start,i),n=g.events.filter(x=>x.day===day).length;
+    const chip=document.createElement('span');chip.textContent=wmsGenDateText(day).slice(0,5)+' · '+n;daygrid.append(chip);
+   }
+  }else{
+   const chip=document.createElement('span');chip.textContent='Sem registros de instalação datados';daygrid.append(chip);
   }
   full.append(daygrid);
   const formula=document.createElement('div');formula.textContent=g.installed+' instalações ÷ 6 dias = '+decimal(g.avg)+'/dia. Autonomia total: '+(g.autonomyTotal===null?'não calculável':decimal(g.autonomyTotal)+' dias')+'; autonomia no almoxarifado: '+(g.autonomyBase===null?'não calculável':decimal(g.autonomyBase)+' dias')+'.';
