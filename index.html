@@ -150,7 +150,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </nav>
   <div class="s-spacer"></div>
   <div class="s-foot"><div class="s-foot-icon">✓</div><div><strong>Fonte protegida</strong><small>Dados consultados no HOPE<br>Somente administrador</small></div></div>
-  <p class="s-version">v17 · Centro de comando</p>
+  <p class="s-version">v18 · Centro de comando</p>
 </aside><main class="wms-workspace">
 <header><div class="brand"><div class="logo">W</div><div><strong>Procisa WMS</strong><small>Campo Grande · Mato Grosso do Sul</small></div></div><div class="status" id="connectionStatus"><i class="dot"></i><span id="statusText">Não conectado</span></div></header>
 <div class="topline"><div><h1 id="wmsPageTitle">Sua operação, em uma só tela.</h1><p class="lead" id="wmsPageSubtitle">Estoque, técnicos e reposição com uma visão simples e confiável.</p><span class="tag">Matriz 06/11 · Conect 09/11 · NAtlas até 09/11 — fotografias históricas</span></div><a href="./tecnico/" class="btn-ghost mini" style="text-decoration:none">Portal dos técnicos e pedidos</a><button id="showSetup" class="btn-ghost mini hidden" type="button">Sair da conta</button></div>
@@ -399,7 +399,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <input id="dailySearch" class="search" type="search" placeholder="Buscar técnico, login Z ou modelo" aria-label="Buscar consumo diário">
  <div class="tablebox"><table><thead><tr><th>Técnico / Z</th><th>Modelo</th><th>Período observado</th><th>Dias</th><th>Baixas vinculadas</th><th>Média / dia</th></tr></thead><tbody id="dailyBody"></tbody></table></div>
  <p class="helper">Média inicial de amostra curta; não comprova o executor da OS. Datas são de detecção entre fotografias. Sem relatório ou carga suficiente, a média fica indisponível. Modelos provisórios continuam sinalizados. Estimativas antigas do bot permanecem separadas.</p>
- <details class="ops-details"><summary>Baixas recentes e casos sem vínculo</summary><div class="tablebox"><table><thead><tr><th>Detecção</th><th>Serial</th><th>Login Z</th><th>Carga de</th><th>Resultado</th></tr></thead><tbody id="dailyDetails"></tbody></table></div></details>
+ <details class="ops-details"><summary>Baixas recentes e casos sem vínculo</summary><div class="tablebox"><table><thead><tr><th>Instalação (coluna P)</th><th>Serial</th><th>Login Z</th><th>Carga de</th><th>Resultado</th></tr></thead><tbody id="dailyDetails"></tbody></table></div></details>
 </section>
 
 </main></div>
@@ -1423,7 +1423,7 @@ const V17_PAGES={
  estoque:['operationalPanel','sapFilterPanel','stockPanel','consumptionPanel'],
  tecnicos:['dailyConsumptionPanel','techniciansPanel','natlasLastHolderPanel','technicianConsumptionPanel'],
  auditoria:['conectAtualPanel','proofInstallationsPanel'],
- importar:['dailyImportPanel','importPanel','wmsExternalPanel']
+ importar:['wmsBatchPanel','dailyImportPanel','importPanel','wmsExternalPanel']
 };
 const V17_TEXT={
  inicio:['Sua operação, em uma só tela.','Indicadores confiáveis, prioridades e decisões claras para o almoxarifado.'],
@@ -1574,16 +1574,32 @@ v17Open('inicio');
 // Cruzamento diário: fonte e média independentes das estimativas antigas.
 let dailyCandidate=null,dailyMeans=[],dailyEvents=[];
 function dailyReady(){ $('dailySave').disabled=!dailyCandidate||!$('dailyComplete').checked||!authSession?.access_token; }
+function wmsExcelInstalacao(valor){
+ const s=String(valor??'').trim();
+ if(!s)return null;
+ const numeric=Number(s.replace(',','.'));
+ if(/^\d+(?:[.,]\d+)?$/.test(s)&&numeric>=20000&&numeric<80000){
+  const d=new Date(Date.UTC(1899,11,30)+Math.floor(numeric)*86400000);
+  return Number.isNaN(d.getTime())?null:d.toISOString().slice(0,10);
+ }
+ const iso=/^(\d{4}-\d{2}-\d{2})(?:[ T].*)?$/.exec(s);
+ if(iso){const d=new Date(iso[1]+'T12:00:00Z');return Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==iso[1]?null:iso[1];}
+ const br=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+ if(br){const value=br[3]+'-'+br[2]+'-'+br[1],d=new Date(value+'T12:00:00Z');return Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==value?null:value;}
+ return null;
+}
 function dailyParseRows(rows){
  const head=rows[0]?.row.map(wmsNorm)||[],col=n=>head.indexOf(wmsNorm(n));
- for(const n of ['Série / Ender. Princ.','Material SAP','Local','Tipo Local'])if(col(n)<0)throw new Error('Coluna obrigatória ausente: '+n+'. Use o relatório completo BAIXADOS ASSINANTES.');
+ for(const n of ['Série / Ender. Princ.','Material SAP','Local','Tipo Local','Data da Alteração'])if(col(n)<0)throw new Error('Coluna obrigatória ausente: '+n+'. Use o NAtlas completo (com a coluna P).');
  const out=[],seen=new Set();
  for(const r of rows.slice(1)){
   const get=n=>String(r.row[col(n)]??'').trim(),original=get('Série / Ender. Princ.');if(!original)continue;
   const serial=original.split('/').at(-1).trim().toUpperCase(),sap=get('Material SAP'),local=wmsNorm(get('Local')),tipo_local=wmsNorm(get('Tipo Local'));
   if(!serial||serial.length>100||/^[0-9]+([,.][0-9]+E[+-]?[0-9]+|E[+-][0-9]+)$/i.test(serial)||!sap||!local||!tipo_local)throw new Error('Identificador ou localização inválidos na linha '+r.line+'. Exporte seriais como texto.');
   if(seen.has(serial))throw new Error('Serial duplicado na linha '+r.line+': '+serial);seen.add(serial);
-  out.push({serial,sap,local,tipo_local,contrato:get('Contrato NETSMS')});
+  const data_instalacao=wmsExcelInstalacao(get('Data da Alteração'));
+  if(local==='ASSINANTE'&&tipo_local==='ASSINANTE'&&!data_instalacao)throw new Error('Data da instalação inválida na coluna P, linha '+r.line+'.');
+  out.push({serial,sap,local,tipo_local,contrato:get('Contrato NETSMS'),data_instalacao});
  }
  if(!out.length)throw new Error('Relatório sem registros.');return out;
 }
@@ -1593,7 +1609,7 @@ $('dailyFile').addEventListener('change',async e=>{
  dailyCandidate=null;$('dailyComplete').checked=false;dailyReady();const file=e.target.files?.[0];if(!file)return;
  $('dailyPreview').textContent='Conferindo o relatório...';
  try{const linhas=dailyParseRows(await wmsSheetRows(file)),hash=await wmsHash(file),n=linhas.filter(x=>x.local==='ASSINANTE'&&x.tipo_local==='ASSINANTE').length;
- dailyCandidate={file,linhas,hash};$('dailyPreview').textContent=`${file.name}: ${pt(linhas.length)} seriais únicos; ${pt(n)} em ASSINANTE nas duas colunas; ${pt(linhas.length-n)} em outras localizações. Só as mudanças em relação à fotografia anterior entram na apuração. Confira a data e confirme o relatório completo.`;
+ dailyCandidate={file,linhas,hash};const porDia=new Map();for(const linha of linhas){if(linha.local==='ASSINANTE'&&linha.tipo_local==='ASSINANTE')porDia.set(linha.data_instalacao,(porDia.get(linha.data_instalacao)||0)+1);}const datas=[...porDia].sort((a,b)=>a[0].localeCompare(b[0]));$('dailyPreview').textContent=`${file.name}: ${pt(linhas.length)} seriais únicos; ${pt(n)} em ASSINANTE; outras localizações: ${pt(linhas.length-n)}. Datas da coluna P: ${datas.map(([data,num])=>data+' ('+pt(num)+')').join(' · ')}. Serão registradas só as transições ainda não contabilizadas por serial. Confirme a data e o relatório completo.`;
  }catch(e){$('dailyPreview').textContent=e.message}dailyReady();
 });
 $('dailySave').addEventListener('click',async()=>{
@@ -1616,11 +1632,11 @@ function dailyRender(){
  if(!list.length)add(body,['Média indisponível: aguardando intervalo e carga válidos.','','','','','']);
  for(const r of list)add(body,[r.nome+' / '+r.login_conect,r.nome_modelo+(r.modelo_confirmado?'':' (provisório)'),r.inicio+' a '+r.fim,r.dias,r.baixas,Number(r.baixas/r.dias).toLocaleString('pt-BR',{maximumFractionDigits:2})]);
  $('dailyExport').disabled=!list.length;$('dailyExport').onclick=()=>saveExcel('Consumo por ultimo portador',['Tecnico','Login Z','Modelo','Inicio','Fim','Dias corridos','Baixas','Media por dia'],list.map(r=>[r.nome,r.login_conect,r.nome_modelo,r.inicio,r.fim,r.dias,r.baixas,r.baixas/r.dias]),['Janela de até dois dias; datas de detecção entre fotografias.','Último portador, não autoria comprovada. Mapeamento provisório quando indicado.'],'Procisa_WMS_Consumo_Diario.xlsx');
- const detail=$('dailyDetails');detail.replaceChildren();for(const r of dailyEvents)add(detail,[r.detectado_em,r.numero_serie,r.login_conect,r.carga_referencia,r.classificacao]);if(!dailyEvents.length)add(detail,['Nenhuma baixa nova nesta rotina.','','','','']);
+ const detail=$('dailyDetails');detail.replaceChildren();for(const r of dailyEvents)add(detail,[r.data_instalacao||r.detectado_em,r.numero_serie,r.login_conect,r.carga_referencia,r.classificacao]);if(!dailyEvents.length)add(detail,['Nenhuma baixa nova nesta rotina.','','','','']);
 }
 async function dailyLoad(){
  if(!authSession?.access_token)return;
- try{const [means,lots,events]=await Promise.all([apiGet('wms_medias_curta','*'),apiGet('wms_leituras_diarias','referencia,anterior,dias,quantidade,novas,vinculadas',{order:'referencia.desc'}),apiGet('wms_baixas_compactas','numero_serie,detectado_em,login_conect,carga_referencia,classificacao',{classificacao:'not.in.(historico_anterior,referencia_inicial)',order:'detectado_em.desc'})]);
+ try{const [means,lots,events]=await Promise.all([apiGet('wms_medias_curta','*'),apiGet('wms_leituras_diarias','referencia,anterior,dias,quantidade,novas,vinculadas',{order:'referencia.desc'}),apiGet('wms_baixas_compactas','numero_serie,detectado_em,data_instalacao,login_conect,carga_referencia,classificacao',{classificacao:'not.in.(historico_anterior,referencia_inicial)',order:'detectado_em.desc'})]);
  dailyMeans=means;dailyEvents=events;const last=lots[0];
  $('dailyStatus').textContent=!last?'Aguardando a primeira fotografia.':!last.anterior?`Referência inicial: ${last.referencia}, ${pt(last.quantidade)} seriais. A média aparecerá após a próxima fotografia diária válida.`:`Última fotografia: ${last.referencia}; intervalo desde ${last.anterior}: ${last.dias} dia(s). ${pt(last.novas)} novos registros e ${pt(last.vinculadas)} vínculos recentes. ${last.dias>2?'Janela excedida: média indisponível.':'Média indicativa do consumo observado.'}`;
  dailyRender();dailyReady();
