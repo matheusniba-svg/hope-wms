@@ -75,7 +75,7 @@ const techMap=new Map(techs.map(x=>[String(x.id),x.nome]));const materialMap=new
 for(const p of orders){const d=txt('div','');d.className='item';d.append(txt('strong','#'+p.id+' · '+(techMap.get(String(p.tecnico_id))||'Técnico')+' · '+p.status));for(const item of items.filter(x=>x.requisicao_id===p.id))d.append(txt('p',item.quantidade_solicitada+' × '+(materialMap.get(String(item.material_id))||'Material')));if(p.observacao)d.append(txt('p',p.observacao));if(['pendente','em_separacao'].includes(p.status)){const b=txt('button',p.status==='pendente'?'Iniciar separação':'Marcar pronto');b.className='secondary';b.onclick=async()=>{b.disabled=true;try{await api('/rest/v1/requisicoes?id=eq.'+p.id,'PATCH',{status:p.status==='pendente'?'em_separacao':'pronto'});await loadAdmin();notice('Pedido atualizado')}catch(e){notice(e.message,true)}finally{b.disabled=false}};d.append(b)}box.append(d)}
 }
 el('signin').onclick=async()=>{const b=el('signin');b.disabled=true;try{const d=await api('/auth/v1/token?grant_type=password','POST',{email:el('email').value.trim(),password:el('password').value},false);remember(d);el('password').value='';await boot()}catch(e){notice(e.message,true)}finally{b.disabled=false}};
-el('signup').onclick=async()=>{const b=el('signup');b.disabled=true;try{const email=el('email').value.trim(),password=el('password').value;if(!email||password.length<8)throw Error('Informe e-mail e senha com pelo menos 8 caracteres.');const d=await api('/auth/v1/signup','POST',{email,password},false);if(d?.access_token){remember(d);await boot()}else notice('Conta solicitada. Confira a caixa de entrada e confirme seu e-mail, caso receba a confirmação. Depois entre aqui.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('signup').onclick=async()=>{const b=el('signup');b.disabled=true;try{const email=el('email').value.trim(),password=el('password').value;if(!email||password.length<8)throw Error('Informe e-mail e senha com pelo menos 8 caracteres.');const callback='https://matheusniba-svg.github.io/hope-wms/tecnico/';const d=await api('/auth/v1/signup?redirect_to='+encodeURIComponent(callback),'POST',{email,password},false);if(d?.access_token){remember(d);await boot()}else notice('Conta solicitada. Confira a caixa de entrada e confirme seu e-mail, caso receba a confirmação. Depois entre aqui.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
 el('password').addEventListener('keydown',e=>{if(e.key==='Enter')el('signin').click()});
 el('requestAccess').onclick=async()=>{const z=el('loginZ').value.trim().toUpperCase();if(!/^Z[0-9A-Z]{4,20}$/.test(z))return notice('Login Z inválido.',true);const b=el('requestAccess');b.disabled=true;try{await api('/rest/v1/wms_solicitacoes_acesso','POST',{usuario_id:user.id,email_contato:user.email,login_conect:z,status:'pendente'});await boot();notice('Pedido de acesso enviado; aguarde a conferência do almoxarifado.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
 el('checkAccess').onclick=()=>boot().then(()=>notice('Situação consultada.')).catch(e=>notice(e.message,true));
@@ -83,5 +83,14 @@ el('orderButton').onclick=async()=>{const b=el('orderButton');b.disabled=true;tr
 el('reload').onclick=()=>loadTech().then(()=>notice('Dados atualizados.')).catch(e=>notice(e.message,true));
 el('adminReload').onclick=()=>loadAdmin().then(()=>notice('Dados atualizados.')).catch(e=>notice(e.message,true));
 el('logout').onclick=async()=>{try{await api('/auth/v1/logout','POST',{})}catch{}sess=null;user=null;profile=null;save();['pending','tech','admin','logout'].forEach(x=>visible(x,false));visible('login',true);dismiss()};
-(async()=>{try{sess=JSON.parse(localStorage.getItem(STORE)||'null');if(sess)await boot()}catch(e){sess=null;save();visible('login',true);notice('Sua sessão precisa ser renovada. Entre novamente.',true)}})();
+(async()=>{try{
+const q=new URLSearchParams(window.location.hash.slice(1));
+if(q.has('access_token')&&q.has('refresh_token')){
+  remember({access_token:q.get('access_token'),refresh_token:q.get('refresh_token'),expires_in:Number(q.get('expires_in')||3600)});
+  window.history.replaceState(null,'',window.location.pathname+window.location.search);
+  await boot();notice('E-mail confirmado. Acesso verificado.');return;
+}
+if(q.has('error_description')){const msg=q.get('error_description');window.history.replaceState(null,'',window.location.pathname+window.location.search);notice('O link não pôde ser validado: '+msg,true);}
+sess=JSON.parse(localStorage.getItem(STORE)||'null');if(sess)await boot()
+}catch(e){sess=null;save();visible('login',true);notice('Sua sessão precisa ser renovada. Entre novamente.',true)}})();
 </script></body></html>
