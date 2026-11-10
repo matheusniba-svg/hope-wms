@@ -489,7 +489,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 </main></div>
 <dialog id="wmsGeneralModal" class="wms-modal" aria-labelledby="wmsGeneralTitle">
   <div class="wms-modal-head">
-    <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE</span><h2 id="wmsGeneralTitle">Consumo geral e autonomia</h2><p id="wmsGeneralWindow" class="wms-modal-subtitle">Consultando o histórico...</p></div>
+    <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE · CÁLCULO D-1 · v18.6</span><h2 id="wmsGeneralTitle">Consumo geral e autonomia</h2><p id="wmsGeneralWindow" class="wms-modal-subtitle">Consultando o histórico...</p></div>
     <button type="button" class="wms-modal-close" id="wmsGeneralClose" aria-label="Fechar janela">×</button>
   </div>
   <div class="wms-general-grid">
@@ -2045,11 +2045,13 @@ function wmsGeneralRender(){
   toggle.addEventListener('click',()=>{detail.hidden=!detail.hidden;toggle.textContent=detail.hidden?'+':'−';toggle.setAttribute('aria-expanded',String(!detail.hidden));});
  }
  const sourceDaily=validEvents.some(x=>x.source==='diário');
+ const sourceLegacy=validEvents.filter(x=>x.source==='histórico').length;
+ const sourceCompared=validEvents.filter(x=>x.source==='diário').length;
  let note='';
  if(!reference)note='Nenhuma fotografia confirmada do Conect/NAtlas para estabelecer a referência D-1. Os traços não representam consumo zero.';
  else if(!hasNatlas)note='Referência D-1: '+wmsGenDateText(targetDay)+'. Ainda não há registros datados do NAtlas para verificar o consumo.';
  else {
-  note='Consumo D-1: somente seriais em ASSINANTE com data da coluna P igual a '+wmsGenDateText(targetDay)+'. '+
+  note='Consumo D-1: somente seriais em ASSINANTE com data da coluna P igual a '+wmsGenDateText(targetDay)+'. Fontes: '+sourceLegacy+' serial(is) do histórico NAtlas e '+sourceCompared+' do cruzamento diário, deduplicados por serial. '+
    'Amostra de 1 dia: pode variar; não é uma média de 6 dias nem garantia de abastecimento. '+
    (sourceDaily?'Considera eventos das fotografias importadas, sem contar o mesmo serial duas vezes. ':'Parte das instalações vem do histórico inicial. ')+
    'Autonomia total inclui técnicos e aceite; autonomia base inclui somente “No estoque”. ';
