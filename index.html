@@ -1678,6 +1678,7 @@ $('wmsBatchFiles').addEventListener('change',e=>{
   }
  }
  const daily=groups.diario;
+ if(daily.some(f=>f.name.toLowerCase().includes('inicializados matriz cgde')))warnings.push('ATENÇÃO: INICIALIZADOS MATRIZ CGDE só pode ser confirmado como relatório diário se também trouxer os equipamentos em ASSINANTE e as demais localizações. Uma lista só de inicializados não serve para calcular baixas.');
  if(daily.length>1)warnings.push('Há mais de um candidato a NAtlas/Matriz diária. Foi selecionado apenas '+daily[0].name+' para a prévia. Confira se é a fotografia COMPLETA antes de confirmar.');
  if(groups.nne.length>1)warnings.push('Mais de um arquivo NNE: usando apenas o primeiro.');
  if(groups.analitico.length>1)warnings.push('Mais de um Analítico: usando apenas o primeiro.');
