@@ -24,9 +24,9 @@ button{font:inherit;font-weight:720;color:#113a32;background:var(--accent);paddi
 <header><div><div class="brand">HOPE / PROCISA WMS</div><h1>Portal do técnico</h1><div class="meta">Campo Grande · Consulta de carga e pedidos antecipados</div></div><div class="between"><a href="../">Painel administrativo</a><button id="logout" class="secondary hidden">Sair</button></div></header>
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 <section id="login" class="card" style="max-width:540px;margin-left:auto;margin-right:auto">
-<h2>Entrar</h2><p>Entre com seu e-mail e senha do HOPE. Para ter acesso à carga, seu cadastro precisa ser aprovado pelo almoxarifado.</p>
-<div class="fields"><label class="field">E-mail<input type="email" id="email" autocomplete="username"></label><label class="field">Senha<input type="password" id="password" autocomplete="current-password" minlength="8"></label><div class="between"><button id="signin">Entrar</button><button class="secondary" id="signup">Criar conta</button></div></div>
-<p class="meta">Ao criar a conta, confirme seu e-mail caso o Supabase solicite. Você poderá pedir acesso depois de entrar.</p>
+<h2>Entrar no HOPE</h2><p>Utilize o login Z do Conect e sua senha individual recebida do almoxarifado.</p>
+<div class="fields"><label class="field">Login Z<input type="text" id="email" maxlength="7" placeholder="Z123456" autocomplete="username" autocapitalize="characters" spellcheck="false"></label><label class="field">Senha<input type="password" id="password" autocomplete="current-password" minlength="8" maxlength="72" placeholder="Senha de 8 caracteres"></label><div class="between"><button id="signin">Entrar no portal</button></div></div>
+<p class="meta">Não precisa de e-mail. Se ainda não recebeu sua senha, peça ao almoxarifado.</p>
 </section>
 <section id="pending" class="card hidden"><h2>Solicitar vínculo com técnico</h2><p id="pendingNote">Informe seu login Z do Conect. O administrador precisa conferir sua identidade antes de liberar o acesso.</p><div class="grid"><label class="field">Login Z <input id="loginZ" maxlength="40" placeholder="Z502781"></label><div class="between" style="align-items:end"><button id="requestAccess">Solicitar acesso</button><button id="checkAccess" class="secondary">Verificar aprovação</button></div></div><p class="meta">Seu login Z não é sua senha e, sozinho, não libera acesso aos dados.</p></section>
 <section id="tech" class="hidden"><div class="card"><h2 id="welcome">Minha carga atual</h2><p>Fotografia da posição no Conect; não equivale a conferência física do estoque.</p><div class="stats"><div class="stat"><strong id="fieldCount">—</strong><span>Comigo</span></div><div class="stat"><strong id="pendingCount">—</strong><span>Aguardando confirmação</span></div><div class="stat"><strong id="orderCount">—</strong><span>Pedidos recentes</span></div></div><div class="scroll"><table><thead><tr><th>Número de série</th><th>Material</th><th>Situação</th></tr></thead><tbody id="inventory"></tbody></table></div></div>
@@ -50,7 +50,11 @@ function txt(tag,s){const e=document.createElement(tag);e.textContent=String(s??
 function row(parent,values){const tr=txt('tr','');for(const v of values)tr.append(txt('td',v));parent.append(tr)}
 async function boot(){dismiss();user=await api('/auth/v1/user');const ps=await api('/rest/v1/usuarios_wms?select=papel,tecnico_id,ativo');profile=(ps||[]).find(p=>p.ativo);visible('login',false);visible('logout',true);for(const id of ['pending','tech','admin'])visible(id,false);
  if(profile?.papel==='admin'){visible('admin',true);await loadAdmin();return}
- if(profile?.papel==='tecnico'&&profile.tecnico_id){visible('tech',true);await loadTech();return}
+ if(profile?.papel==='tecnico'&&profile.tecnico_id){
+  const people=await api('/rest/v1/tecnicos?select=ativo,situacao&id=eq.'+profile.tecnico_id);
+  if(!people?.[0]||!people[0].ativo||people[0].situacao==='desligado')throw Error('Técnico sem autorização ativa. Consulte o almoxarifado.');
+  visible('tech',true);await loadTech();return
+ }
  visible('pending',true);const rs=await api('/rest/v1/wms_solicitacoes_acesso?select=login_conect,status');const r=rs?.[0];if(r){el('pendingNote').textContent='Sua solicitação para '+r.login_conect+' está '+r.status+'. Solicite ao almoxarifado que confira e aprove sua conta.';el('loginZ').value=r.login_conect;el('loginZ').disabled=true;visible('requestAccess',false)}else{el('pendingNote').textContent='Informe seu login Z do Conect. A aprovação exige conferência de identidade pelo administrador.';el('loginZ').disabled=false;visible('requestAccess',true)}
 }
 async function loadTech(){const [people,positions,materials,orders]=await Promise.all([
@@ -74,8 +78,13 @@ for(const p of requests){const d=txt('div','');d.className='item';d.append(txt('
 const techMap=new Map(techs.map(x=>[String(x.id),x.nome]));const materialMap=new Map(materials.map(x=>[String(x.id),x.descricao]));const box=el('received');box.replaceChildren();if(!orders.length)box.append(txt('p','Nenhum pedido cadastrado.'));
 for(const p of orders){const d=txt('div','');d.className='item';d.append(txt('strong','#'+p.id+' · '+(techMap.get(String(p.tecnico_id))||'Técnico')+' · '+p.status));for(const item of items.filter(x=>x.requisicao_id===p.id))d.append(txt('p',item.quantidade_solicitada+' × '+(materialMap.get(String(item.material_id))||'Material')));if(p.observacao)d.append(txt('p',p.observacao));if(['pendente','em_separacao'].includes(p.status)){const b=txt('button',p.status==='pendente'?'Iniciar separação':'Marcar pronto');b.className='secondary';b.onclick=async()=>{b.disabled=true;try{await api('/rest/v1/requisicoes?id=eq.'+p.id,'PATCH',{status:p.status==='pendente'?'em_separacao':'pronto'});await loadAdmin();notice('Pedido atualizado')}catch(e){notice(e.message,true)}finally{b.disabled=false}};d.append(b)}box.append(d)}
 }
-el('signin').onclick=async()=>{const b=el('signin');b.disabled=true;try{const d=await api('/auth/v1/token?grant_type=password','POST',{email:el('email').value.trim(),password:el('password').value},false);remember(d);el('password').value='';await boot()}catch(e){notice(e.message,true)}finally{b.disabled=false}};
-el('signup').onclick=async()=>{const b=el('signup');b.disabled=true;try{const email=el('email').value.trim(),password=el('password').value;if(!email||password.length<8)throw Error('Informe e-mail e senha com pelo menos 8 caracteres.');const callback='https://matheusniba-svg.github.io/hope-wms/tecnico/';const d=await api('/auth/v1/signup?redirect_to='+encodeURIComponent(callback),'POST',{email,password},false);if(d?.access_token){remember(d);await boot()}else notice('Conta solicitada. Confira a caixa de entrada e confirme seu e-mail, caso receba a confirmação. Depois entre aqui.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
+el('signin').onclick=async()=>{const b=el('signin');b.disabled=true;try{
+ const login=el('email').value.trim().toUpperCase(),pwd=el('password').value;
+ if(!/^Z[0-9]{6}$/.test(login))throw Error('Informe seu login Z (Z123456).');
+ if(pwd.length<8)throw Error('Informe a senha de 8 caracteres recebida do almoxarifado.');
+ const d=await api('/auth/v1/token?grant_type=password','POST',{email:login.toLowerCase()+'@tecnicos.hope-wms.invalid',password:pwd},false);
+ remember(d);el('password').value='';await boot();
+ }catch(e){notice('Login ou senha incorretos, ou acesso não autorizado. '+(e.message&&e.message.includes('perfil')?e.message:''),true)}finally{b.disabled=false}};
 el('password').addEventListener('keydown',e=>{if(e.key==='Enter')el('signin').click()});
 el('requestAccess').onclick=async()=>{const z=el('loginZ').value.trim().toUpperCase();if(!/^Z[0-9A-Z]{4,20}$/.test(z))return notice('Login Z inválido.',true);const b=el('requestAccess');b.disabled=true;try{await api('/rest/v1/wms_solicitacoes_acesso','POST',{usuario_id:user.id,email_contato:user.email,login_conect:z,status:'pendente'});await boot();notice('Pedido de acesso enviado; aguarde a conferência do almoxarifado.')}catch(e){notice(e.message,true)}finally{b.disabled=false}};
 el('checkAccess').onclick=()=>boot().then(()=>notice('Situação consultada.')).catch(e=>notice(e.message,true));
