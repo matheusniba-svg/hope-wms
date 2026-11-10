@@ -1434,7 +1434,19 @@ function opsLine(label,value){const row=document.createElement('div');row.classN
 
 // Fontes distintas: NAtlas ASSINANTE alimenta consumo; Atlas completo alimenta saldo;
 // Planejamento alimenta trânsito. O cruzamento é uma prévia local, sem baixar nem aumentar estoque.
-let wmsAtlasFull=null,wmsSupplyPlan=null;
+let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null;
+async function wmsD1Load(){
+ try{
+  const rows=await apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,observacao',{order:'referencia.desc'});
+  wmsD1Snapshot=rows[0]||null;
+  wmsSupplyRenderStatus();renderOperations();
+  if($('wmsGeneralModal').open)wmsGeneralRender();
+ }catch(error){
+  console.warn('HOPE: conferência D-1 indisponível',error);
+  $('wmsSupplyStatus').textContent='Conferência D-1 indisponível. O estoque Conect permanece preservado. '+String(error.message||error);
+ }
+}
+document.addEventListener('wms-baseline-loaded',wmsD1Load);
 async function wmsNamedSheetRows(file,sheetName){
  if(!file||file.size>23e6)throw Error('Escolha um XLSX válido com até 23 MB.');
  const {read,names}=zipCatalog(await file.arrayBuffer());
@@ -1512,14 +1524,21 @@ function wmsSupplyPlanParse(rows){
  };
  if(ix.sap<0||ix.qty<0||ix.status<0||ix.cd<0)throw Error('Planejamento sem código SAP, quantidade, CD ou situação.');
  const out=[],keys=new Set();
+ const iMunicipio=wmsTabColumn(head,['NM_MUNICIPIO_SAP']);
+ const iFornecedor=wmsTabColumn(head,['COD_FORN_SAP']);
+ const iTipo=wmsTabColumn(head,['TIPO_MATERIAL']);
  for(const r of rows.slice(at+1)){
   const get=k=>ix[k]<0?'':String(r.row[ix[k]]||'').trim(),cd=wmsNorm(get('cd')),status=wmsNorm(get('status')),delivered=wmsNorm(get('delivery'));
-  if(!cd.includes('CAMPO GRANDE')||!status.includes('TRANSITO')||delivered&&delivered!=='-'&&delivered!=='0')continue;
+  const fromNNE=iMunicipio>=0&&iFornecedor>=0;
+  const destino=fromNNE?wmsNorm(r.row[iMunicipio]||''):cd;
+  const fornecedor=fromNNE?displaySap(r.row[iFornecedor]||''):'';
+  if(!destino.includes('CAMPO GRANDE')||(fromNNE&&fornecedor!=='1000805')||!status.includes('TRANSITO')||(delivered&&delivered!=='-'&&delivered!=='0'))continue;
   const sap=displaySap(get('sap')),qty=wmsNum(get('qty'));
   if(!sap||!Number.isSafeInteger(qty)||qty<=0)continue;
   const nf=get('nf'),reserve=get('reserve'),key=[sap,nf,reserve,r.line].join('|');
   if(keys.has(key))continue;keys.add(key);
-  out.push({sap,qty,nf,reserve});
+  const category=iTipo>=0?(wmsNorm(r.row[iTipo])==='ETER'?'equipamento':'insumo'):(/^41\d{6}$/.test(sap)||sap==='23105'?'equipamento':'insumo');
+  out.push({sap,qty,nf,reserve,category});
  }
  return out;
 }
@@ -1534,6 +1553,16 @@ function wmsSupplyD1Counts(reference){
    if(x.local!=='ASSINANTE'||x.tipo_local!=='ASSINANTE'||x.data_instalacao!==d1)continue;
    unique.set(cleanSerial(x.serial),{sap:x.sap,date:d1});
   }
+ }else if(wmsD1Snapshot&&wmsD1Snapshot.referencia===reference&&wmsD1Snapshot.dia_consumo===d1){
+  const entries=Object.entries(wmsD1Snapshot.instalacoes_sap||{});
+  const counts=new Map();
+  for(const [sap,n] of entries){
+   const qty=Number(n);
+   if(!Number.isSafeInteger(qty)||qty<0)continue;
+   const model=nomeModeloSap(sap);
+   counts.set(model,(counts.get(model)||0)+qty);
+  }
+  return counts;
  }else if(dailyLatestReference&&dailyLatestReference>=reference){
   for(const x of natlasBaixas){
    const date=dateForCG(x.data_ultima_alteracao_local);
@@ -1554,16 +1583,21 @@ function wmsSupplyD1Counts(reference){
 function wmsSupplyRenderStatus(){
  const atlas=wmsAtlasFull,plan=wmsSupplyPlan,ref=opsReference||'não informada';
  const atlasCount=atlas?.rows.length,planCount=plan?.rows.length;
+ const snapshot=wmsD1Snapshot?.referencia===opsReference?wmsD1Snapshot:null;
+ const planEquip=plan?.rows.filter(x=>x.category==='equipamento')||[],planInsumos=plan?.rows.filter(x=>x.category==='insumo')||[];
  $('wmsSupplyStatus').textContent='Conect: '+ref+' · '+
-  (atlas?'Atlas Procisa: '+pt(atlasCount)+' seriais inicializados ('+atlas.file+')':'Atlas Procisa: não enviado')+' · '+
-  (plan?'Planejamento: '+pt(planCount)+' linhas não entregues ('+plan.file+')':'Planejamento: não enviado')+
-  '. Prévia local, não altera o Supabase. Igualdade de SAP e quantidade sugere conferência, mas não prova que a carga chegou.';
+  (snapshot?'Consumo D-1 '+snapshot.dia_consumo.split('-').reverse().join('/')+': '+pt(snapshot.instalacoes_total)+' instalações conferidas em dois NAtlas. ':'Consumo D-1: aguardando conferência. ')+
+  (snapshot?'NNE: '+pt(snapshot.nne_eter_em_transito??0)+' equipamentos e '+pt(snapshot.nne_emis_em_transito??0)+' insumos em trânsito. ':'')+
+  (atlas?'Atlas Procisa: '+pt(atlasCount)+' seriais, prévia. ':'')+
+  (plan?'Planejamento selecionado: '+pt(planEquip.length)+' linha(s) de equipamento e '+pt(planInsumos.length)+' de insumo; não soma no estoque. ':'')+
+  'Nenhum material é marcado como entregue automaticamente.';
 }
 $('wmsAtlasFullFile').addEventListener('change',async e=>{
  const file=e.target.files?.[0];wmsAtlasFull=null;
  if(!file){wmsSupplyRenderStatus();renderOperations();return;}
  $('wmsSupplyStatus').textContent='Lendo Atlas...';
- try{const rows=await wmsNamedSheetRows(file,'ATLAS');
+ try{
+  const rows=/natlas_relatorio_posicao_equipamento/i.test(file.name)?await wmsSheetRows(file):await wmsNamedSheetRows(file,'ATLAS');
   wmsAtlasFull={file:file.name,rows:wmsSupplyAtlasParse(rows)};
  }catch(err){$('wmsSupplyStatus').textContent='Atlas não conferido: '+String(err.message||err);renderOperations();return;}
  wmsSupplyRenderStatus();renderOperations();
@@ -1572,7 +1606,8 @@ $('wmsSupplyPlanFile').addEventListener('change',async e=>{
  const file=e.target.files?.[0];wmsSupplyPlan=null;
  if(!file){wmsSupplyRenderStatus();renderOperations();return;}
  $('wmsSupplyStatus').textContent='Lendo planejamento...';
- try{const rows=await wmsNamedSheetRows(file,'PLANEJAMENTO');
+ try{
+  const rows=/^nne[_ -]/i.test(file.name)?await wmsSheetRows(file):await wmsNamedSheetRows(file,'PLANEJAMENTO');
   wmsSupplyPlan={file:file.name,rows:wmsSupplyPlanParse(rows)};
  }catch(err){$('wmsSupplyStatus').textContent='Planejamento não conferido: '+String(err.message||err);renderOperations();return;}
  wmsSupplyRenderStatus();renderOperations();
@@ -1611,7 +1646,7 @@ function renderOperations(){
  }
  const atlasByModel=new Map(),planByModel=new Map();
  if(atlas)for(const x of atlas.rows){const name=nomeModeloSap(x.sap);atlasByModel.set(name,(atlasByModel.get(name)||0)+1);}
- if(plan)for(const x of plan.rows){const name=nomeModeloSap(x.sap);planByModel.set(name,(planByModel.get(name)||0)+x.qty);}
+ if(plan)for(const x of plan.rows){if(x.category!=='equipamento')continue;const name=nomeModeloSap(x.sap);planByModel.set(name,(planByModel.get(name)||0)+x.qty);}
  const union=new Map([...codeGroups].map(([k,g])=>[k,{...g}]));
  for(const model of [...atlasByModel.keys(),...planByModel.keys()]){
   if(!union.has(model))union.set(model,{code:model,no_estoque:0,com_tecnico:0,confirmacao:0,serials:[]});
@@ -1628,7 +1663,7 @@ function renderOperations(){
   const tr=document.createElement('tr');
   const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[d1===null?'—':pt(installs||0),'num'],
    [days===null?'—':decimal(days)+' d','num'],
-   [plan===null?'—':pt(planned||0),'num'],[atlas===null?'—':pt(atlasCount||0),'num'],
+   [plan===null?(wmsD1Snapshot?.referencia===reference?pt(wmsD1Snapshot.nne_eter_em_transito??0):'—'):pt(planned||0),'num'],[atlas===null?'—':pt(atlasCount||0),'num'],
    [atlas===null||!reference?'—':pt(pending.length),'num']];
   const detail=document.createElement('tr');detail.className='wms-stock-extra';detail.hidden=true;
   const extra=document.createElement('td');extra.colSpan=7;
@@ -2370,12 +2405,13 @@ function wmsGeneralRender(){
    if(serial&&day)bySerial.set(serial,{day,sap:x.sap,source:'prévia não gravada'});
   }
  }
- const hasNatlas=Boolean(reference&&(usePreview||(dailyLatestReference&&dailyLatestReference>=reference)));
- const validEvents=targetDay&&hasNatlas?[...bySerial.values()].filter(x=>x.day===targetDay):[];
- const installed=targetDay&&hasNatlas?validEvents.length:null;
+ const confirmedD1=!usePreview&&wmsD1Snapshot?.referencia===reference&&wmsD1Snapshot?.dia_consumo===targetDay?wmsD1Snapshot:null;
+ const hasNatlas=Boolean(reference&&(usePreview||confirmedD1||(dailyLatestReference&&dailyLatestReference>=reference)));
+ const validEvents=targetDay&&hasNatlas&&!confirmedD1?[...bySerial.values()].filter(x=>x.day===targetDay):[];
+ const installed=confirmedD1?confirmedD1.instalacoes_total:(targetDay&&hasNatlas?validEvents.length:null);
  const needsUpdate=Boolean(reference&&(!dailyLatestReference||dailyLatestReference<reference));
  const freshness=$('wmsGeneralFreshness');
- freshness.hidden=!needsUpdate&&!usePreview;
+ freshness.hidden=!!confirmedD1||(!needsUpdate&&!usePreview);
  if(usePreview){
   $('wmsGeneralFreshnessTitle').textContent='Prévia do NAtlas de '+wmsGenDateText(reference)+' — ainda não gravada';
   $('wmsGeneralFreshnessMessage').textContent='Os números abaixo vêm da planilha selecionada em Atualizações, não do histórico confirmado. Confira os resultados e use “Atualizar somente NAtlas” quando estiverem corretos.';
@@ -2408,6 +2444,15 @@ function wmsGeneralRender(){
    else {g.pending++;sr.pending++;}
   }
  }
+ if(confirmedD1)for(const [code,n] of Object.entries(confirmedD1.instalacoes_sap||{})){
+  const sap=displaySap(code),qty=Number(n);
+  if(!Number.isSafeInteger(qty)||qty<0)continue;
+  const g=group(wmsGenKey(sap));
+  g.codes.add(sap);g.instaladosCodes.add(sap);
+  if(!g.porSap.has(sap))g.porSap.set(sap,{base:0,tech:0,pending:0,installed:0});
+  g.porSap.get(sap).installed+=qty;
+  g.fromSnapshot=(g.fromSnapshot||0)+qty;
+ }
  for(const event of validEvents){
   const name=wmsGenKey(event.sap),g=group(name);
   const sap=displaySap(event.sap||'');
@@ -2419,7 +2464,7 @@ function wmsGeneralRender(){
  const models=[...groups.values()];
  for(const g of models){
   g.total=g.base+g.tech+g.pending;
-  g.installed=g.events.length;
+  g.installed=g.events.length+(g.fromSnapshot||0);
   g.avg=installed===null?null:g.installed;
   g.autonomyTotal=hasBase&&g.avg>0?g.total/g.avg:null;
   g.autonomyBase=hasBase&&g.avg>0?g.base/g.avg:null;
@@ -2430,7 +2475,7 @@ function wmsGeneralRender(){
  $('wmsGenStock').textContent=base===null?'—':pt(base);
  $('wmsGenAutonomy').textContent=base!==null&&avg>0?decimal(base/avg)+' dias':'—';
  $('wmsGeneralWindow').textContent=reference?
-  'Fotografia de '+wmsGenDateText(reference)+' · D-1: '+wmsGenDateText(targetDay)+(usePreview?' · PRÉVIA NAtlas selecionado, ainda NÃO gravado':' · dados registrados no HOPE'):
+  'Fotografia de '+wmsGenDateText(reference)+' · D-1: '+wmsGenDateText(targetDay)+(confirmedD1?' · consumo conferido em dois relatórios do NAtlas':usePreview?' · PRÉVIA NAtlas selecionado, ainda NÃO gravado':' · dados registrados no HOPE'):
   'Sem fotografia confirmada para determinar a data D-1';
  const search=$('wmsGenModelSearch').value.trim().toLocaleLowerCase('pt-BR'),sort=$('wmsGenModelSort').value;
  const shown=models.filter(g=>g.name.toLocaleLowerCase('pt-BR').includes(search)||[...g.codes].join(' ').includes(search));
@@ -2496,6 +2541,7 @@ function wmsGeneralRender(){
  const sourceCompared=validEvents.filter(x=>x.source==='diário').length;
  let note='';
  if(!reference)note='Nenhuma fotografia confirmada do Conect/NAtlas para estabelecer a referência D-1. Os traços não representam consumo zero.';
+ else if(confirmedD1)note='Consumo de '+wmsGenDateText(targetDay)+' conferido em dois relatórios: '+pt(confirmedD1.instalacoes_total)+' seriais ASSINANTE únicos, agrupados por SAP. Estoque do Conect de '+wmsGenDateText(reference)+'. A autonomia considera apenas esse consumo D-1; não é uma média histórica. NNE: '+pt(confirmedD1.nne_eter_em_transito??0)+' equipamento(s) ETER em trânsito; insumos não entram no estoque de equipamentos. O histórico completo de serial continua preservado nas planilhas originais.';
  else if(!hasNatlas)note='Consumo D-1 ainda NÃO validado. O Conect registra a fotografia de '+wmsGenDateText(reference)+', mas a última fotografia completa do NAtlas gravada no banco é de '+wmsGenDateText(dailyLatestReference)+'. O valor antigo de 13 não representa o NAtlas de 10/11. Importe o NAtlas desse dia (sem duplicar o Conect) ou selecione-o em Atualizações para conferir a PRÉVIA.';
  else {
   note='Consumo D-1: somente seriais em ASSINANTE com data da coluna P igual a '+wmsGenDateText(targetDay)+'. '+(usePreview?'PRÉVIA DO ARQUIVO COMPLETO SELECIONADO: valores ainda não gravados no Supabase. ':'Fontes gravadas: '+sourceLegacy+' serial(is) do histórico NAtlas e '+sourceCompared+' do cruzamento diário, deduplicados por serial. ')+
