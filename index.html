@@ -203,6 +203,8 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-general-freshness strong{display:block;font-size:13px}
 .wms-general-freshness span{display:block;font-size:12px;line-height:1.6;margin:5px 0 10px}
 .wms-general-freshness button{font-size:12px;padding:7px 11px;border-color:#ab884e}
+.wms-easy-note{background:#11273a!important;border:1px solid #29475b!important;color:#bcd2df!important;font-size:12px!important;padding:10px 14px!important}
+.wms-extra-data summary{font-size:12px;color:#aec3d0}
 </style>
 </head>
 <body class="wms-locked">
@@ -283,25 +285,25 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <details class="ov-help"><summary>Como interpretar este painel?</summary><p><strong>Na base:</strong> situação “No Estoque” no Conect, não contagem física. <strong>Em campo:</strong> equipamentos na carga dos técnicos. <strong>Aceite:</strong> equipamentos aguardando confirmação, não somados novamente à carga. <strong>Baixas:</strong> NAtlas em ASSINANTE com contrato e último portador identificado; a autoria ainda requer validação. <strong>Kit:</strong> planejamento com parâmetros do bot, não uma entrega efetivada. Para investigar cada caso, utilize as abas à esquerda.</p></details>
 </section>
 <section class="panel" id="operationalPanel" aria-labelledby="operationalTitle">
- <div class="section-top"><div><h2 id="operationalTitle">Centro operacional · Campo Grande</h2><small>Posição do Conect por modelo, consumo NAtlas, conferência e planejamento de kits.</small></div><span id="opsBadge" class="status-chip warning">Sem fotografia recente confirmada</span></div>
+ <div class="section-top"><div><h2 id="operationalTitle">Estoque por equipamento</h2><small>Quantidades na base e com os técnicos.</small></div><span id="opsBadge" class="status-chip warning">Sem fotografia recente confirmada</span></div>
  <div id="opsOrigin" class="ops-origin">Para ver a posição de 09/11, selecione os seis relatórios na seção Atualização do Conect. A prévia funciona antes de gravar no Supabase.</div>
  <div class="ops-metrics">
-   <div class="ops-stat"><span>No estoque (Conect)</span><strong id="opsBase">—</strong><small>Não é contagem física</small></div>
-   <div class="ops-stat"><span>Com técnicos</span><strong id="opsField">—</strong><small>Identificados por login Z</small></div>
-   <div class="ops-stat"><span>Aguardando aceite</span><strong id="opsPending">—</strong><small>Não somar duas vezes</small></div>
-   <div class="ops-stat"><span>Total ativo</span><strong id="opsTotal">—</strong><small>União de seriais únicos</small></div>
+   <div class="ops-stat"><span>Na base</span><strong id="opsBase">—</strong><small>Posição do Conect</small></div>
+   <div class="ops-stat"><span>Com técnicos</span><strong id="opsField">—</strong><small>Em campo</small></div>
+   <div class="ops-stat"><span>A confirmar</span><strong id="opsPending">—</strong><small>Em confirmação</small></div>
+   <div class="ops-stat"><span>Total</span><strong id="opsTotal">—</strong><small>Equipamentos registrados</small></div>
  </div>
  <div class="wms-summary-actions">
-   <button class="btn wms-main-metric-button" type="button" id="wmsGeneralOpen"><span aria-hidden="true">◉</span> Consumo geral e autonomia</button>
-   <button class="btn-ghost" type="button" id="wmsStockDetailsToggle" aria-expanded="false" aria-controls="wmsStockDetails">Mostrar tabela e detalhes por modelo</button>
+   <button class="btn wms-main-metric-button" type="button" id="wmsGeneralOpen"><span aria-hidden="true">◉</span> Ver consumo e autonomia</button>
+   <button class="btn-ghost" type="button" id="wmsStockDetailsToggle" aria-expanded="false" aria-controls="wmsStockDetails">Ver estoque por modelo</button>
   </div>
- <div class="ops-specials" id="opsSpecials"><span>Reversa/retirados: selecione os seis arquivos para conferir categorias fora do saldo ativo.</span></div>
- <div class="ops-explainer" id="opsLimit">A Matriz de 06/11 e o Conect de 09/11 não são fotografias do mesmo instante. Diferenças entre essas datas exigem análise de movimentações, não são perdas confirmadas.</div>
+ <details class="ops-details wms-extra-data"><summary>Reversa e retirados (opcional)</summary><div class="ops-specials" id="opsSpecials"><span>Dados disponíveis após selecionar relatórios.</span></div></details>
+ <div class="ops-explainer wms-easy-note" id="opsLimit">Os saldos vêm do Conect. Não representam contagem física.</div>
  <div id="wmsStockDetails" hidden>
- <div class="section-top"><div><strong class="mini">Estoque, consumo e cobertura por modelo</strong><div class="section-note">A Matriz inclui material com técnicos; No Estoque é a situação separada no Conect. “—” significa fonte ainda não carregada, nunca saldo zero. Cobertura só aparece com histórico suficiente e datas compatíveis.</div></div><div class="filters"><input id="opsSearch" class="search" placeholder="Buscar modelo ou equipamento" aria-label="Buscar modelo na operação"/><select id="opsSort" aria-label="Ordenar visão operacional"><option value="stock">Maior estoque</option><option value="low">Menor estoque</option><option value="usage">Maior consumo observado</option><option value="sap">Modelo (A–Z)</option></select></div></div>
- <div class="tablebox"><table><thead><tr><th>Modelo</th><th>Mapeamento</th><th class="num">No Estoque Conect</th><th class="num">Com Técnicos Conect</th><th class="num">Aceite Conect</th><th class="num">Matriz total 06/11</th><th class="num">Disponível teórico 06/11</th><th class="num">Δ*</th><th class="num">Instalações NAtlas</th><th>Cobertura total</th><th>Autonomia base</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="11">Carregue os relatórios do Conect.</td></tr></tbody></table></div>
- <div class="section-note" id="opsFooter">*A coluna Δ só é conclusiva com snapshots equivalentes, na mesma data e com as mesmas regras de inclusão. Trânsito não é estoque disponível.</div>
- <details class="ops-details"><summary>Conferir seriais sem correspondência entre as duas fotografias</summary><p class="section-note">A lista é investigativa. Seriais que mudaram de posição entre datas diferentes não são automaticamente divergências ou perdas.</p><div id="opsSerialDiff" class="ops-serials">Aguardando dados.</div></details>
+ <div class="section-top"><div><strong class="mini">Quantidade por equipamento</strong><div class="section-note">Posição atual de cada modelo no Conect.</div></div><div class="filters"><input id="opsSearch" class="search" placeholder="Buscar modelo ou equipamento" aria-label="Buscar modelo na operação"/><select id="opsSort" aria-label="Ordenar visão operacional"><option value="stock">Maior estoque</option><option value="low">Menor estoque</option><option value="sap">Modelo (A–Z)</option></select></div></div>
+ <div class="tablebox"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Com técnicos</th><th class="num">A confirmar</th><th class="num">Total</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="5">Aguardando Conect.</td></tr></tbody></table></div>
+ <div class="section-note" id="opsFooter">Para consultar consumo e autonomia, use o botão acima.</div>
+ <details class="ops-details wms-extra-data" id="opsExtraDetails"><summary>Outras consultas e ferramentas (opcional)</summary><details class="ops-details"><summary>Conferir seriais entre relatórios</summary><p class="section-note">A lista é investigativa. Seriais que mudaram de posição entre datas diferentes não são automaticamente divergências ou perdas.</p><div id="opsSerialDiff" class="ops-serials">Aguardando dados.</div></details>
  <div class="ops-split">
   <div class="ops-subpanel"><h3>Equipamentos mais consumidos</h3><p class="section-note">Somente seriais instalados registrados no NAtlas; não confundir com retirada de carga.</p><div id="opsTopItems" class="ops-short">Ainda não há leitura do NAtlas.</div></div>
   <div class="ops-subpanel"><h3>Ranking de instalações por técnico</h3><p class="section-note">Somente instalações associadas a um responsável comprovado.</p><div id="opsTopTechs" class="ops-short">Aguardando instalações confirmadas por login Z.</div></div>
@@ -326,7 +328,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </div>
 
  </div>
- <div class="ops-explainer"><strong>Dados ainda necessários para automatizar todo o fluxo:</strong> relatórios históricos BAIXADOS/INSTALADOS com técnico, data, OS e contrato; Matriz atualizada no mesmo dia; planilha de abastecimento com SAP, quantidade, nota fiscal e previsão de chegada. Sem essas fontes, os rankings, divergências e coberturas são classificados como incompletos.</div>
+ </details>
  </div>
 </section>
 
@@ -570,7 +572,7 @@ let lastUsageRows=[],lastUsagePeriod=null;
 let modeloPorMaterial=new Map(),modeloPorSap=new Map(), botMedias=[],natlasBaixas=[];
 function nomeModeloMaterial(id){const x=modeloPorMaterial.get(String(id));if(x)return x.nome_modelo;const m=byMaterialIndex.get(String(id));return m?.descricao||'MODELO NÃO IDENTIFICADO'}
 function nomeModeloSap(sap){const code=displaySap(sap||'');if(!code)return 'MODELO NÃO IDENTIFICADO';return modeloPorSap.get(code)?.nome_modelo||([ ...byMaterialIndex.values()].find(m=>displaySap(m.codigo_sap)===code)?.descricao||'MODELO NÃO IDENTIFICADO')}
-function statusModelo(modelo){const x=[...modeloPorSap.values()].filter(v=>v.nome_modelo===modelo);if(!x.length)return 'Não classificado';return x.every(v=>v.confirmado)?'Conferido pelo bot':'Provisório · conferir SALDO ATLAS'}
+function statusModelo(modelo){const x=[...modeloPorSap.values()].filter(v=>v.nome_modelo===modelo);return x.length&&x.every(v=>v.confirmado)?'Conferido pelo bot':''}
 function mediaBot(id,modelo){return botMedias.find(x=>String(x.tecnico_id)===String(id)&&x.nome_modelo===modelo)||null}
 function modeloKitQuantidades(login,modelo){const result={carga:0,pend:0,estoque:0};for(const p of opsPositions){if(nomeModeloSap(p.codigo_sap)!==modelo)continue;if(p.situacao==='no_estoque')result.estoque++;else if(p.login_conect===login&&p.situacao==='com_tecnico')result.carga++;else if(p.login_conect===login&&p.situacao==='confirmacao')result.pend++}return result}
 function calcularKit(media,carga,pend,estoque,dias,margem,atraso){const need=media*dias*(1+margem/100), ideal=need>=.25?Math.ceil(need-1e-9):0,semBaixa=Math.min(carga,Math.floor(media*atraso+.5)),pagar=Math.max(0,ideal-(carga-semBaixa)-pend);return {ideal,pagar,semBaixa,atendivel:Math.min(pagar,estoque),falta:Math.max(0,pagar-estoque)}}
@@ -1262,7 +1264,7 @@ function renderOperations(){
  const hasData=opsPositions.length>0, codeGroups=opsCurrentGroups(),hist=opsOriginalMatrix(),seen=opsInstallationCounts(),safeSameDate=opsReference==='2026-11-06';
  $('opsBadge').className='status-chip '+(opsCurrentFromDB?'okay':'warning');$('opsBadge').textContent=opsCurrentFromDB?'Confirmado no banco':hasData?'Prévia não gravada':'Aguardando Conect';
  $('opsOrigin').className='ops-origin'+(!opsCurrentFromDB?' ops-preview':'');
- $('opsOrigin').textContent=hasData?`${opsSource} · referência ${opsReference||'sem data'} · ${pt(opsPositions.length)} linhas. Matriz: 06/11/2026; NAtlas: até 09/11/2026 (fontes com datas diferentes). ${opsCurrentFromDB?'Posição de Conect registrada no banco.':'Esta fotografia ainda não foi enviada ao banco.'}`:'Ainda não há atualização do Conect registrada no HOPE. Utilize a carga inicial administrativa uma única vez; depois o painel carregará os dados sozinho.';
+ $('opsOrigin').textContent=hasData?`Conect de ${opsReference?opsReference.slice(8,10)+'/'+opsReference.slice(5,7)+'/'+opsReference.slice(0,4):'data não informada'} · ${opsCurrentFromDB?'dados salvos':'prévia não salva'}`:'Estoque ainda não carregado. Envie os relatórios em Atualizações.';
  const extras=$('opsSpecials');extras.replaceChildren();
  const rev=typeof importsPreview!=='undefined'?importsPreview.get('reversa'):null;
  const ret=typeof importsPreview!=='undefined'?importsPreview.get('retirado'):null;
@@ -1274,24 +1276,33 @@ function renderOperations(){
  else if(opsCurrentFromDB&&opsLatestResumo&&Number.isFinite(Number(opsLatestResumo.retirado)))countsExtra.push(['Retirado',Number(opsLatestResumo.retirado)]);
  if(countsExtra.length){for(const [label,n] of countsExtra){const el=document.createElement('span'),strong=document.createElement('strong');el.textContent=label+': ';strong.textContent=pt(n);el.append(strong);extras.append(el)}}
  else extras.textContent='Reversa e retirados ficam fora do saldo ativo. Os detalhes devem estar no HOPE após a carga inicial.';
- $('opsLimit').textContent=!hasData?'Conect ainda não carregado: os traços (—) não são zero. A Matriz de 06/11 inclui equipamentos com técnicos; disponível teórico é Matriz menos carga histórica do Conect e não substitui contagem física.':safeSameDate?'A comparação quantitativa usa fontes com a mesma data, mas ainda exige conferir status e seriais. No Estoque é situação do Conect, não conferência física.':'ATENÇÃO: Matriz 06/11 e Conect '+opsReference+' são fotografias de datas diferentes. O Δ é ocultado até existir Matriz equivalente. Estoque físico, carga, aceite e trânsito não são somados indiscriminadamente.';
- const raw=[...new Set([...codeGroups.keys(),...hist.keys()])].map(code=>{const g=codeGroups.get(code)||{code,description:hist.get(code)?.material||'Sem descrição',no_estoque:0,com_tecnico:0,confirmacao:0};return {...g,matriz:hist.get(code)?.quantidade??null,disponivelTeorico:hist.get(code)?.disponivelTeorico??null,instalacoes:seen.g.get(code)||0}});
+ $('opsLimit').textContent=hasData?'Quantidades informadas pelo Conect, não uma contagem física.':'Selecione os arquivos em Atualizações para ver o estoque.';
+ const raw=[...codeGroups.values()].map(g=>({...g,total:g.no_estoque+g.com_tecnico+g.confirmacao}));
  const busca=$('opsSearch').value.toLocaleLowerCase('pt-BR').trim(),sort=$('opsSort').value;
- const list=raw.filter(r=>(r.code+' '+r.description).toLocaleLowerCase('pt-BR').includes(busca));
- list.sort((a,b)=>sort==='low'?(hasData?a.no_estoque-b.no_estoque:(a.disponivelTeorico??0)-(b.disponivelTeorico??0)):sort==='usage'?b.instalacoes-a.instalacoes:sort==='sap'?a.code.localeCompare(b.code):(hasData?b.no_estoque-a.no_estoque:(b.disponivelTeorico??0)-(a.disponivelTeorico??0)));
+ const list=raw.filter(g=>g.code.toLocaleLowerCase('pt-BR').includes(busca));
+ list.sort((a,b)=>sort==='low'?a.no_estoque-b.no_estoque:sort==='sap'?a.code.localeCompare(b.code,'pt-BR'):b.no_estoque-a.no_estoque);
  const body=$('opsRows');body.replaceChildren();
- for(const g of list){const tr=document.createElement('tr');const total=g.no_estoque+g.com_tecnico+g.confirmacao;
-  const delta=safeSameDate&&g.matriz!==null?total-g.matriz:null;
-  let coverage='—',baseAutonomy='—';
-  // Para demonstrar cobertura, exigimos janela consistente e ao menos 7 datas observadas; também precisa de fontes alinhadas.
-  const daysSample=[...seen.days].sort(),enoughHistory=daysSample.length>=7&&calendarDays(daysSample[0],daysSample[daysSample.length-1])>=14;
-  if(enoughHistory&&safeSameDate&&g.instalacoes>0){const daily=g.instalacoes/calendarDays(daysSample[0],daysSample[daysSample.length-1]);coverage=g.matriz!==null?decimal(g.matriz/daily)+' dias*':'—';baseAutonomy=decimal(g.no_estoque/daily)+' dias*';}
-  const cells=[[g.code,'code'],[g.description,'sapname'],[hasData?pt(g.no_estoque):'—','num'],[hasData?pt(g.com_tecnico):'—','num'],[hasData?pt(g.confirmacao):'—','num'],[g.matriz===null?'—':pt(g.matriz),'num'],[g.disponivelTeorico===null?'—':pt(g.disponivelTeorico),'num'],[delta===null?'—':(delta>0?'+':'')+pt(delta),'num '+(delta?'ops-negative':'')],[pt(g.instalacoes),'num'],[coverage,'ops-no'],[baseAutonomy,'ops-no']];
-  for(let j=0;j<cells.length;j++){const [value,cl]=cells[j],td=document.createElement('td');td.className=cl;
-   if(j===0){const b=document.createElement('button');b.className='ops-sapbutton';b.textContent=displaySap(value);b.title='Mostrar seriais deste modelo';b.addEventListener('click',()=>{renderOpsSerialDetails(g.code);const det=document.querySelector('.ops-details');det.open=true;det.scrollIntoView({behavior:'smooth',block:'nearest'});});td.append(b);}else td.textContent=value;tr.append(td)}body.append(tr);
+ for(const g of list){
+  const tr=document.createElement('tr');
+  const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[pt(g.com_tecnico),'num'],[pt(g.confirmacao),'num'],[pt(g.total),'num']];
+  for(let j=0;j<cells.length;j++){
+   const [value,cl]=cells[j],td=document.createElement('td');td.className=cl;
+   if(j===0){
+    const button=document.createElement('button');button.className='ops-sapbutton';button.textContent=value;
+    button.title='Conferir seriais deste equipamento';
+    button.addEventListener('click',()=>{
+     $('opsExtraDetails').open=true;renderOpsSerialDetails(g.code);
+     const detail=document.querySelector('#opsExtraDetails .ops-details');
+     if(detail){detail.open=true;detail.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    });
+    td.append(button);
+   }else td.textContent=value;
+   tr.append(td);
+  }
+  body.append(tr);
  }
- if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=11;td.className='empty';td.textContent='Nenhum item encontrado nesta fotografia.';tr.append(td);body.append(tr)}
- $('opsFooter').textContent=`${pt(list.length)} modelo(s) exibido(s). *Δ: (No Estoque + Com Técnico + Aceite) − Matriz, somente quando as datas coincidirem. ${seen.days.size===1?'NAtlas com 1 dia de instalações: coberturas e alertas por consumo indisponíveis até histórico suficiente.':'Coberturas marcadas com * são provisórias; validar a continuidade da série NAtlas antes de tomar decisões.'} Trânsito será importado de abastecimento e não pode ser tratado como disponível para entrega.`;
+ if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=5;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
+ $('opsFooter').textContent=pt(list.length)+' equipamento(s). Para consumo e autonomia, clique no botão acima.';
  renderOpsSerialDetails(null);renderOpsRankings();renderOpsKitSelectors();
 }
 function renderOpsSerialDetails(code){
@@ -1936,7 +1947,7 @@ function wmsStockShowDetails(open){
  const show=Boolean(open);
  $('wmsStockDetails').hidden=!show;
  document.body.classList.toggle('wms-stock-compact',!show);
- $('wmsStockDetailsToggle').textContent=show?'Ocultar tabela e detalhes por modelo':'Mostrar tabela e detalhes por modelo';
+ $('wmsStockDetailsToggle').textContent=show?'Ocultar estoque por modelo':'Ver estoque por modelo';
  $('wmsStockDetailsToggle').setAttribute('aria-expanded',String(show));
 }
 $('wmsStockDetailsToggle').addEventListener('click',()=>wmsStockShowDetails($('wmsStockDetails').hidden));
@@ -2075,10 +2086,6 @@ function wmsGeneralRender(){
   const nameBlock=document.createElement('div'),strong=document.createElement('strong');strong.textContent=g.name;nameBlock.append(strong);
   const codes=[...g.codes].sort();
   if(codes.length){const sub=document.createElement('small');sub.textContent=codes.join(', ');nameBlock.append(sub);}
-  const validation=document.createElement('small'),modelStatus=statusModelo(g.name);
-  validation.textContent=modelStatus==='Conferido pelo bot'?'Modelo conferido':'Modelo provisório — confirmar classificação SAP';
-  validation.className=modelStatus==='Conferido pelo bot'?'wms-model-validated':'wms-model-provisional';
-  nameBlock.append(validation);
   wrap.append(toggle,nameBlock);nameTd.append(wrap);tr.append(nameTd);
   for(const n of [g.base,g.tech,g.pending,g.total])wmsGenCell(tr,hasBase?pt(n):'—');
   wmsGenCell(tr,installed===null?'—':pt(g.installed));
