@@ -217,6 +217,27 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .tech-pending-group summary strong{font-size:12px;color:#f3ca85}
 .tech-pending-badge{display:inline-block;border:1px solid #9d753b;background:#3b2b18;border-radius:12px;color:#f5c783;font-size:11px;font-weight:650;padding:3px 9px;margin-top:5px}
 @media(max-width:700px){.tech-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tech-manager-modal{width:min(97vw,1030px);max-width:1030px}
+.tech-manager-layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(320px,1.1fr);gap:18px;margin:19px 0 5px}
+.tech-manager-side,.tech-manager-editor{padding:14px;background:#0c2031;border:1px solid #365367;border-radius:13px;min-width:0}
+.tech-manager-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.tech-manager-side-head strong{font-size:12px;color:#d6e8f0}
+.tech-manager-side .search,.tech-manager-side select{width:100%;margin-bottom:9px;padding:10px;border-radius:9px;background:#0a1727;border:1px solid #3b586d;color:#ecf6fa}
+.tech-manager-items{max-height:430px;overflow:auto;display:grid;gap:5px;align-content:start}
+.tech-manager-person{width:100%;border:1px solid #2b4b60;border-radius:9px;padding:10px;text-align:left;background:#132b3b;color:#ebf6fa;cursor:pointer}
+.tech-manager-person.selected{border-color:#5edfc1;background:#16473d}
+.tech-manager-person strong,.tech-manager-person small{display:block}
+.tech-manager-person strong{font-size:12px}.tech-manager-person small{font-size:11px;color:#acc6d2;margin-top:4px}
+.tech-manager-editor h3{font-size:16px;margin:0 0 15px}
+.tech-manager-editor label{display:grid;gap:6px;margin:0 0 12px;font-size:12px;color:#bed2de}
+.tech-manager-editor input,.tech-manager-editor select{width:100%;background:#071727;border:1px solid #3c5b70;border-radius:9px;padding:10px 11px;color:#effaff}
+.tech-manager-editor input[readonly]{opacity:.7}
+.tech-manager-editor label[hidden]{display:none!important}
+.tech-manager-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
+.tech-manager-foot{font-size:11px;color:#a4bfcb;line-height:1.5;margin-top:15px}
+.tech-situation-tag{display:inline-block;border:1px solid #a77b3d;background:#372b1d;color:#f4c580;border-radius:12px;padding:4px 9px;margin-top:5px;font-size:11px;font-weight:700}
+.tech-situation-tag.is-departed{border-color:#835367;background:#3a2634;color:#f0b7c6}
+@media(max-width:750px){.tech-manager-layout{grid-template-columns:1fr}.tech-manager-items{max-height:230px}}
 </style>
 </head>
 <body class="wms-locked">
@@ -438,7 +459,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <div class="foot"><span id="usageFoot">—</span><span>Sem consumo no período: cobertura não estimável.</span></div>
 </section>
 <section class="panel" id="techniciansPanel">
-  <div class="section-top"><div><h2>Inventário dos técnicos</h2><small>Carga individual do Conect (importação 3). Selecione o técnico para consultar seus equipamentos e seriais.</small></div><div class="export-actions"><button id="exportTechniciansExcel" class="btn-ghost mini" disabled>Exportar carga (Excel)</button><button id="backTechnicians" class="btn-ghost mini hidden" type="button">← Todos os técnicos</button></div></div>
+  <div class="section-top"><div><h2>Inventário dos técnicos</h2><small>Carga individual do Conect (importação 3). Selecione o técnico para consultar seus equipamentos e seriais.</small></div><div class="export-actions"><button id="techManageOpen" class="btn-ghost mini" type="button">Gerenciar técnicos</button><button id="exportTechniciansExcel" class="btn-ghost mini" disabled>Exportar carga (Excel)</button><button id="backTechnicians" class="btn-ghost mini hidden" type="button">← Todos os técnicos</button></div></div>
   <div class="tech-summary"><div class="metric"><span>Técnicos cadastrados</span><strong id="techCount">—</strong></div><div class="metric"><span>Equipamentos com técnicos</span><strong id="techTotal">—</strong></div><div class="metric"><span>Aguardando aceite</span><strong id="techPendingTotal">—</strong></div><div class="metric"><span>Na carga selecionada</span><strong id="techSelectedTotal">—</strong></div></div>
   <div class="tech-selectors"><label>Encontrar técnico (nome ou login)<input id="technicianSearch" type="search" placeholder="Digite o nome ou login Conect" /></label><label id="serialFilterWrap" class="hidden">Pesquisar equipamento ou serial da carga<input id="technicianMaterialSearch" type="search" placeholder="SAP, descrição ou número de série" /></label></div>
   <div id="techList" class="tech-list"><div class="empty">Conecte o banco para visualizar os técnicos.</div></div>
@@ -513,6 +534,39 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 </section>
 
 </main></div>
+<dialog id="techManageModal" class="wms-modal tech-manager-modal" aria-labelledby="techManagerTitle">
+ <div class="wms-modal-head">
+  <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE</span><h2 id="techManagerTitle">Gerenciar técnicos</h2><p class="wms-modal-subtitle">Cadastre pelo nome e login Z. Marque férias, atestado, afastamento ou desligamento.</p></div>
+  <button type="button" id="techManageClose" class="wms-modal-close" aria-label="Fechar gerenciamento">×</button>
+ </div>
+ <div class="tech-manager-layout">
+  <div class="tech-manager-side">
+   <div class="tech-manager-side-head"><strong id="techManageStats">Técnicos</strong><button id="techManageNew" class="btn mini" type="button">+ Novo técnico</button></div>
+   <input id="techManageSearch" type="search" class="search" placeholder="Buscar nome ou login Z" aria-label="Buscar técnicos">
+   <select id="techManageFilter" aria-label="Filtrar pela situação">
+    <option value="todos">Todas as situações</option><option value="ativo">Ativos</option><option value="ferias">Férias</option><option value="atestado">Atestado</option><option value="afastado">Afastados</option><option value="desligado">Desligados</option>
+   </select>
+   <div id="techManageItems" class="tech-manager-items" aria-live="polite"><p>Carregando técnicos...</p></div>
+  </div>
+  <div class="tech-manager-editor">
+   <h3 id="techManageEditTitle">Novo técnico</h3>
+   <input type="hidden" id="techManageId">
+   <label>Nome completo<input id="techManageName" type="text" maxlength="160" placeholder="Nome do técnico" autocomplete="off"></label>
+   <label>Login Z do Conect<input id="techManageLogin" type="text" maxlength="7" placeholder="Z123456" autocomplete="off"></label>
+   <label>Situação<select id="techManageStatus">
+    <option value="ativo">Ativo</option><option value="ferias">Férias</option><option value="atestado">Atestado</option><option value="afastado">Afastado</option><option value="desligado">Desligado</option>
+   </select></label>
+   <label id="techManageReturnWrap" hidden>Retorno previsto (opcional)<input id="techManageReturn" type="date"></label>
+   <p class="section-note" id="techManageHint">O cadastro usa o login Z para identificar o técnico no Conect. Não cria senha ou conta de acesso ao portal.</p>
+   <div class="tech-manager-actions">
+    <button id="techManageSave" class="btn" type="button">Salvar técnico</button>
+    <button id="techManageArchive" class="btn-ghost" type="button" hidden>Desligar técnico</button>
+   </div>
+   <p id="techManageMessage" class="section-note" role="status" aria-live="polite"></p>
+  </div>
+ </div>
+ <p class="tech-manager-foot">Desligamentos não apagam histórico nem equipamentos. O acesso ao portal de um técnico desligado é desativado, quando existir.</p>
+</dialog>
 <dialog id="wmsGeneralModal" class="wms-modal" aria-labelledby="wmsGeneralTitle">
   <div class="wms-modal-head">
     <div><span class="wms-modal-eyebrow">HOPE · CAMPO GRANDE · CÁLCULO D-1 · v18.6</span><h2 id="wmsGeneralTitle">Consumo geral e autonomia</h2><p id="wmsGeneralWindow" class="wms-modal-subtitle">Consultando o histórico...</p></div>
@@ -642,7 +696,7 @@ async function load(){
       apiGet('inventario_tecnicos','numero_serie,tecnico_id,material_id',{importacao_id:'eq.3'}),
       apiGet('materiais','id,codigo_sap,descricao'),
       apiGet('instalacoes','id,numero_serie,material_id,tecnico_id,data_instalacao'),
-      apiGet('tecnicos','id,nome,login_conect'),
+      apiGet('tecnicos','id,nome,login_conect,ativo,situacao,situacao_desde,retorno_previsto'),
       apiGet('instalacoes_evidencias','id,instalacao_id,tecnico_id,login_conect,tipo_fonte,classificacao,status_fonte,arquivo_fonte,justificativa'),
       apiGet('wms_instalacoes_tecnicos_comprovadas','instalacao_id,numero_serie,dia_instalacao,tecnico_id,tecnico,login_conect,material_id,codigo_sap,material,numero_os,numero_contrato,tipo_servico,arquivo_fonte,tipo_fonte'),
       apiGet('wms_modelos_sap','material_id,nome_modelo,origem_mapa,confirmado'),
@@ -848,13 +902,13 @@ function renderSelectedTechConsumption(t){
  for(const r of medias.sort((a,b)=>Number(b.media_dia_util)-Number(a.media_dia_util))){const q=propostaModelo(t,r.nome_modelo,r),tr=document.createElement('tr');for(const [v,cl] of [[r.nome_modelo,'sapname'],['Bot · 06/11 (ajustada)','model-note'],[decimal(r.media_dia_util),'num'],[pt(q.pagar),'num']]){const td=document.createElement('td');td.className=cl;td.textContent=v;tr.append(td)}target.append(tr)}
 }
 function buildTechnicianIndex(technicians,records){
-  technicianList=technicians.map(t=>({id:String(t.id),name:String(t.nome||'Sem nome'),login:String(t.login_conect||'')})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  technicianList=technicians.map(t=>({id:String(t.id),name:String(t.nome||'Sem nome'),login:String(t.login_conect||''),situacao:t.situacao||'ativo',ativo:t.ativo!==false,retorno_previsto:t.retorno_previsto||null})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
   allTechSerials=[];technicianInventories=new Map(technicianList.map(t=>[t.id,[]]));
   const seen=new Set();
   for(const r of records){const serial=cleanSerial(r.numero_serie),id=String(r.tecnico_id),key=id+'|'+serial;if(!serial||seen.has(key))continue;seen.add(key);
     const item={serial,materialId:String(r.material_id)};if(!technicianInventories.has(id))technicianInventories.set(id,[]);technicianInventories.get(id).push(item);allTechSerials.push(item);
   }
-  $('techCount').textContent=pt(technicianList.length);$('techTotal').textContent=pt(allTechSerials.length);selectedTechnicianId=null;renderTechnicians();
+  $('techCount').textContent=pt(technicianList.filter(t=>t.situacao!=='desligado').length);$('techTotal').textContent=pt(allTechSerials.length);selectedTechnicianId=null;renderTechnicians();
 }
 function techPendingItems(t){
  const login=String(t?.login||'').trim().toUpperCase(),unique=new Map();
@@ -900,11 +954,20 @@ function renderTechnicians(){
   $('techSelectedTotal').textContent=chosen?pt((technicianInventories.get(chosen.id)||[]).length):'—';
   const filter=$('technicianSearch').value.trim().toLocaleLowerCase('pt-BR');
   if(chosen){$('backTechnicians').classList.remove('hidden');$('serialFilterWrap').classList.remove('hidden');$('techList').classList.add('hidden');$('techDetail').classList.remove('hidden');$('selectedTechnicianName').textContent=chosen.name;$('selectedTechnicianLogin').textContent=chosen.login;
+    $('selectedTechnicianName').textContent=chosen.name+(chosen.situacao==='ativo'?'':' · '+techManageStatusText(chosen.situacao));
     renderTechPending(chosen);renderTechDetail(chosen);renderSelectedTechConsumption(chosen);renderTechNatlas(chosen);return;
   }
   $('backTechnicians').classList.add('hidden');$('serialFilterWrap').classList.add('hidden');$('techList').classList.remove('hidden');$('techDetail').classList.add('hidden');
-  const filtered=technicianList.filter(t=>(t.name+' '+t.login).toLocaleLowerCase('pt-BR').includes(filter));const target=$('techList');target.replaceChildren();
+  const filtered=technicianList.filter(t=>{
+   const custody=(technicianInventories.get(t.id)||[]).length+techPendingItems(t).length;
+   return (t.situacao!=='desligado'||custody>0||filter.length>0)&&(t.name+' '+t.login).toLocaleLowerCase('pt-BR').includes(filter);
+  });const target=$('techList');target.replaceChildren();
   for(const t of filtered){const button=document.createElement('button');button.type='button';const left=document.createElement('div');const name=document.createElement('strong');name.textContent=t.name;const login=document.createElement('span');login.className='secondary';login.textContent='Login Conect: '+t.login;left.append(name,login);const pending=techPendingItems(t).length;
+  if(t.situacao!=='ativo'){
+    const statusBadge=document.createElement('span');statusBadge.className='tech-situation-tag '+(t.situacao==='desligado'?'is-departed':'');
+    statusBadge.textContent=techManageStatusText(t.situacao)+(t.retorno_previsto?' · retorno '+t.retorno_previsto.slice(8,10)+'/'+t.retorno_previsto.slice(5,7):'');
+    left.append(statusBadge);
+  }
   if(pending){const badge=document.createElement('span');badge.className='tech-pending-badge';badge.textContent=pt(pending)+' aguardando aceite';left.append(badge)}
   const count=document.createElement('span');count.className='tech-count';count.textContent=pt((technicianInventories.get(t.id)||[]).length);button.append(left,count);button.addEventListener('click',()=>{selectedTechnicianId=t.id;$('technicianMaterialSearch').value='';renderTechnicians()});target.append(button)}
   if(!filtered.length){const div=document.createElement('div');div.className='empty';div.textContent='Nenhum técnico encontrado.';target.append(div)}
@@ -2206,6 +2269,96 @@ function wmsGeneralRender(){
  if(opsCurrentFromDB&&Number(opsLatestResumo?.quarentena||0)>0)note+=' No Conect, '+Number(opsLatestResumo.quarentena)+' seriais estão em quarentena por identificação inválida e não entram como disponíveis na base.';
  $('wmsGeneralStatus').textContent=note;
 }
+
+// Gestão administrativa do cadastro (não altera Auth nem exige senha do técnico).
+const TECH_STATUS_LABELS={ativo:'Ativo',ferias:'Férias',atestado:'Atestado',afastado:'Afastado',desligado:'Desligado'};
+function techManageStatusText(s){return TECH_STATUS_LABELS[s]||'Não informado'}
+const techManagerModal=$('techManageModal');
+function techManageReturnVisibility(){
+ const show=['ferias','atestado','afastado'].includes($('techManageStatus').value);
+ $('techManageReturnWrap').hidden=!show;
+ if(!show)$('techManageReturn').value='';
+}
+function techManageSelect(t){
+ $('techManageId').value=t?String(t.id):'';
+ $('techManageName').value=t?t.name:'';
+ $('techManageLogin').value=t?t.login:'';
+ $('techManageLogin').readOnly=!!t;
+ $('techManageStatus').value=t?t.situacao:'ativo';
+ $('techManageReturn').value=t?.retorno_previsto||'';
+ $('techManageEditTitle').textContent=t?'Editar técnico · '+t.login:'Novo técnico';
+ $('techManageArchive').hidden=!t||t.situacao==='desligado';
+ $('techManageHint').textContent=t?
+  'O login Z não pode ser alterado após o cadastro, para preservar o vínculo com a carga e os seriais.':
+  'Cadastro operacional por nome e login Z. O acesso com senha ao portal é um processo separado.';
+ $('techManageMessage').textContent='';
+ techManageReturnVisibility();
+ techManageList();
+}
+function techManageList(){
+ const search=$('techManageSearch').value.trim().toLocaleLowerCase('pt-BR'),status=$('techManageFilter').value;
+ const rows=technicianList.filter(t=>(status==='todos'||t.situacao===status)&&(t.name+' '+t.login).toLocaleLowerCase('pt-BR').includes(search));
+ $('techManageStats').textContent=technicianList.filter(t=>t.situacao!=='desligado').length+' em atividade · '+technicianList.filter(t=>t.situacao==='desligado').length+' desligado(s)';
+ const list=$('techManageItems');list.replaceChildren();
+ for(const t of rows){
+  const button=document.createElement('button');button.type='button';button.className='tech-manager-person';
+  if($('techManageId').value===String(t.id))button.classList.add('selected');
+  const box=document.createElement('span'),name=document.createElement('strong'),info=document.createElement('small');
+  name.textContent=t.name;info.textContent=t.login+' · '+techManageStatusText(t.situacao);
+  box.append(name,info);button.append(box);
+  button.addEventListener('click',()=>techManageSelect(t));list.append(button);
+ }
+ if(!rows.length){const empty=document.createElement('p');empty.className='section-note';empty.textContent='Nenhum técnico encontrado.';list.append(empty)}
+}
+$('techManageOpen').addEventListener('click',()=>{
+ $('techManageSearch').value='';$('techManageFilter').value='todos';techManageSelect(null);
+ if(!techManagerModal.open)techManagerModal.showModal();
+});
+$('techManageClose').addEventListener('click',()=>techManagerModal.close());
+$('techManageNew').addEventListener('click',()=>{$('techManageFilter').value='todos';techManageSelect(null);$('techManageName').focus()});
+$('techManageSearch').addEventListener('input',techManageList);
+$('techManageFilter').addEventListener('change',techManageList);
+$('techManageStatus').addEventListener('change',techManageReturnVisibility);
+async function techManageRpc(payload){
+ await ensureAccess();
+ const call=()=>fetch(config.url+'/rest/v1/rpc/wms_gerenciar_tecnico',{
+  method:'POST',headers:{apikey:config.key,Authorization:'Bearer '+config.token,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)
+ });
+ let result=await call();
+ if(result.status===401&&authSession?.refresh_token){await renewSession();result=await call();}
+ const answer=await result.json();
+ if(!result.ok)throw new Error(answer.message||answer.error||'Erro HTTP '+result.status);
+ return answer;
+}
+async function techManageSave(forceDeparted=false){
+ const id=$('techManageId').value||null,nome=$('techManageName').value.trim(),login=$('techManageLogin').value.trim().toUpperCase(),
+ situacao=forceDeparted?'desligado':$('techManageStatus').value,
+ retorno=forceDeparted?null:($('techManageReturnWrap').hidden?null:$('techManageReturn').value||null);
+ if(nome.length<3){$('techManageMessage').textContent='Informe o nome completo do técnico.';return;}
+ if(!/^Z[0-9]{6}$/.test(login)){$('techManageMessage').textContent='O login deve ser Z seguido de seis números.';return;}
+ const current=technicianList.find(t=>t.id===id);
+ if(situacao==='desligado'&&(current?.situacao!=='desligado')){
+  const custody=(technicianInventories.get(id)||[]).length,accept=techPendingItems(current).length;
+  if(!window.confirm('Desligar '+nome+' ('+login+')?\n\nA conta do portal será desativada, se existir. Histórico e seriais serão preservados.'+(custody+accept?'\nATENÇÃO: '+custody+' em carga e '+accept+' aguardando aceite ainda estão associados a esse técnico. Verifique a devolução.':'')+'\n\nConfirmar desligamento?'))return;
+ }
+ $('techManageSave').disabled=true;$('techManageArchive').disabled=true;
+ $('techManageMessage').textContent='Salvando cadastro...';
+ try{
+  const saved=await techManageRpc({p_id:id?Number(id):null,p_nome:nome,p_login:login,p_situacao:situacao,p_retorno_previsto:retorno});
+  knownTechnicians=await apiGet('tecnicos','id,nome,login_conect,ativo,situacao,situacao_desde,retorno_previsto');
+  const oldSelected=selectedTechnicianId;
+  technicianList=knownTechnicians.map(t=>({id:String(t.id),name:String(t.nome),login:String(t.login_conect||''),situacao:t.situacao||'ativo',ativo:t.ativo!==false,retorno_previsto:t.retorno_previsto||null})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+  for(const t of technicianList)if(!technicianInventories.has(t.id))technicianInventories.set(t.id,[]);
+  $('techCount').textContent=pt(technicianList.filter(t=>t.situacao!=='desligado').length);
+  selectedTechnicianId=oldSelected;renderTechnicians();
+  techManageSelect(technicianList.find(t=>t.id===String(saved.id))||null);
+  $('techManageMessage').textContent=situacao==='desligado'?'Desligamento registrado. O histórico e os equipamentos permanecem para conferência.':'Cadastro salvo com sucesso.';
+ }catch(error){$('techManageMessage').textContent='Não foi possível salvar: '+String(error.message||error)}
+ finally{$('techManageSave').disabled=false;$('techManageArchive').disabled=false}
+}
+$('techManageSave').addEventListener('click',()=>techManageSave(false));
+$('techManageArchive').addEventListener('click',()=>techManageSave(true));
+
 const wmsModal=$('wmsGeneralModal');
 $('wmsGeneralGoImport').addEventListener('click',()=>{
  wmsModal.close();
