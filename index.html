@@ -268,6 +268,10 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-supply-inputs label{font-size:11px;display:grid;gap:6px;flex:1;min-width:200px}
 .wms-supply-inputs input{border:1px solid #375569;border-radius:7px;padding:9px;font-size:11px;max-width:100%}
 .wms-supply-note{font-size:11px;color:#bad0db;margin:4px 0;line-height:1.6}
+#operationalPanel .wms-simple-stock{max-width:1150px}
+#operationalPanel .wms-simple-stock table{min-width:850px}
+#operationalPanel .wms-simple-stock th:first-child{width:24%}
+#operationalPanel .wms-simple-stock th:not(:first-child){width:10.85%}
 </style>
 </head>
 <body class="wms-locked">
@@ -1579,6 +1583,45 @@ function wmsSevenDaySource(reference){
  return {means,total,source,start,end};
 }
 
+// Guarda somente a média de 7 dias de um NAtlas completo JÁ confirmado no Supabase.
+// O histórico de origem é imutável e não altera saldos, carga ou instalações.
+async function wmsSaveSevenDayMean(candidate,reference){
+ const weekly=wmsSevenDaySource(reference);
+ if(!weekly||!weekly.source.includes('prévia')||!candidate?.hash)throw Error('Selecione e confirme o NAtlas completo para apurar os 7 dias.');
+ const existing=await apiGet('wms_medias_7dias','referencia,hash_arquivo',{referencia:'eq.'+reference});
+ if(existing.length){
+  if(existing[0].hash_arquivo===candidate.hash)return {already:true};
+  throw Error('Já há uma média de 7 dias registrada para essa data com outro arquivo. É necessário revisar a divergência.');
+ }
+ const serials=new Map();
+ for(const line of candidate.linhas){
+  if(line.local!=='ASSINANTE'||line.tipo_local!=='ASSINANTE')continue;
+  const serial=cleanSerial(line.serial),sap=displaySap(line.sap),date=line.data_instalacao;
+  if(!serial||!sap||!date||date<weekly.start||date>weekly.end)continue;
+  if(serials.has(serial)&&serials.get(serial)!==sap)throw Error('Serial com SAP divergente: '+serial);
+  serials.set(serial,sap);
+ }
+ if(serials.size!==weekly.total)throw Error('A contagem dos 7 dias não confere com a prévia.');
+ const porSap={};
+ for(const sap of serials.values())porSap[sap]=(porSap[sap]||0)+1;
+ const payload={referencia:reference,periodo_inicio:weekly.start,periodo_fim:weekly.end,
+  instalacoes_total:serials.size,instalacoes_sap:porSap,
+  arquivo_origem:candidate.file.name,hash_arquivo:candidate.hash};
+ await ensureAccess();
+ const send=()=>fetch(config.url+'/rest/v1/wms_medias_7dias',{
+  method:'POST',headers:{apikey:config.key,Authorization:'Bearer '+config.token,'Content-Type':'application/json'},
+  body:JSON.stringify(payload)
+ });
+ let res=await send();
+ if(res.status===401&&authSession?.refresh_token){await renewSession();res=await send()}
+ if(!res.ok){
+  const err=await res.json().catch(()=>({}));
+  throw Error(err.message||'Falha ao registrar média 7 dias (HTTP '+res.status+')');
+ }
+ wmsMedia7DiasSaved=payload;
+ return {saved:true,total:serials.size};
+}
+
 function wmsSupplyD1Counts(reference){
  if(!reference)return null;
  const d1=wmsDateOffset(reference,-1);
@@ -2219,7 +2262,13 @@ async function wmsCommitDaily(){
  const req=()=>fetch(WMS_PROJECT_URL+'/rest/v1/rpc/wms_importar_diario',{method:'POST',headers:{apikey:WMS_PUBLISHABLE_KEY,Authorization:'Bearer '+config.token,'Content-Type':'application/json'},body:JSON.stringify(args)});
  let res=await req();if(res.status===401){await renewSession();res=await req()}const data=await res.json();if(!res.ok)throw new Error(data.message||'Falha ao importar');
  $('dailyMsg').textContent=data.resultado==='ja_importado'?'Arquivo já importado: nenhuma duplicação.':data.referencia_inicial?'Referência inicial registrada. A próxima fotografia permitirá observar as mudanças.':`${pt(data.novas)} novos seriais em ASSINANTE registrados; ${pt(data.vinculadas)} vinculados à carga recente. Intervalo: ${data.dias} dia(s). ${data.dias>2?'Intervalo maior que 2 dias: média indisponível.':''}`;
- dailyCandidate=null;$('dailyFile').value='';$('dailyComplete').checked=false;await dailyLoad();return data;
+ let mediaAviso='';
+ try{
+  const weekly=await wmsSaveSevenDayMean(p,dt);
+  mediaAviso=weekly.already?' Média dos sete dias já registrada.':' Média dos sete dias registrada com '+pt(weekly.total)+' instalações únicas.';
+ }catch(error){mediaAviso=' Atenção: NAtlas confirmado, mas a média dos sete dias ainda não foi salva: '+String(error.message||error)}
+ $('dailyMsg').textContent+=mediaAviso;
+ dailyCandidate=null;$('dailyFile').value='';$('dailyComplete').checked=false;await dailyLoad();await wmsD1Load();return data;
  }catch(e){$('dailyMsg').textContent=e.message;throw e}finally{dailyReady()}
 }
 $('dailySave').addEventListener('click',async()=>{try{await wmsCommitDaily()}catch{}});
