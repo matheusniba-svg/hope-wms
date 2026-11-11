@@ -652,7 +652,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
        <option value="usage">Maior média de 7 dias</option>
      </select></label>
    </div>
-   <div class="wms-model-legend"><span class="wms-legend-red">Até 5 dias · Crítico</span><span class="wms-legend-amber">Mais de 5 até 6 · Atenção</span><span class="wms-legend-blue">Mais de 6 · Normal</span><span class="wms-legend-muted">— · Sem consumo observado</span></div>
+   <div class="wms-model-legend"><span class="wms-legend-red">Menos de 7 dias · Crítico</span><span class="wms-legend-amber">De 7 a menos de 15 · Atenção</span><span class="wms-legend-blue">15 dias ou mais · Normal</span><span class="wms-legend-muted">— · Sem consumo observado</span></div>
    <div class="wms-model-scroll" role="region" aria-label="Tabela de médias e autonomias por equipamento" tabindex="0"><table class="wms-model-table">
     <thead><tr><th>Equipamento</th><th>No estoque</th><th>Com técnico</th><th>Confirmação</th><th>Total</th><th>Instalados D-1</th><th>Média diária 7d</th><th>Autonomia total</th><th>Autonomia base</th></tr></thead>
     <tbody id="wmsGenModelRows"><tr><td colspan="9">Aguardando dados do NAtlas e Conect.</td></tr></tbody>
@@ -1556,7 +1556,8 @@ function wmsSevenDaySource(reference){
  const start=wmsDateOffset(reference,-7),end=wmsDateOffset(reference,-1);
  const selected=typeof dailyCandidate!=='undefined'?dailyCandidate:null;
  const completePreview=selected?.file?.name&&wmsBatchDate(selected.file.name)===reference&&
-  selected.linhas?.length&&!wmsNatlasSomenteAssinantes();
+  selected.linhas?.length&&!wmsNatlasSomenteAssinantes()&&
+  selected.linhas.some(x=>x.local==='ASSINANTE'&&x.tipo_local==='ASSINANTE');
  let counts=null,source='';
  if(completePreview){
   const unique=new Map();
@@ -2468,8 +2469,8 @@ function wmsGenKey(sap){
 function wmsGenDateText(day){return day?day.slice(8,10)+'/'+day.slice(5,7)+'/'+day.slice(0,4):'—'}
 function wmsGenStatus(days){
  if(days===null)return 'missing';
- if(days<=5)return 'critical';
- if(days<=6)return 'warning';
+ if(days<7)return 'critical';
+ if(days<15)return 'warning';
  return 'normal';
 }
 function wmsGenCell(row,value,cssClass){
