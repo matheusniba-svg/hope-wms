@@ -462,7 +462,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="section-top"><div><h2 id="importTitle">Atualização do Conect — conferência e envio</h2><small>Conferência obrigatória antes do envio, com histórico de alterações no Supabase.</small></div><span class="status-chip warning">Somente administrador</span></div>
  <div class="import-drop"><label for="conectFiles"><strong>Selecionar relatórios de Campo Grande (.xlsx)</strong></label>
    <input id="conectFiles" type="file" accept=".xlsx" multiple aria-label="Selecionar planilhas do Conect" />
-   <small class="import-muted">Selecione os seis arquivos: No Estoque, Com Técnico, Confirmação Técnico, Total Disponíveis, Aguardando Reversa e Retirado. O navegador verifica os arquivos; somente após sua confirmação enviará os dados dos três relatórios ativos ao Supabase. Reversa e Retirado são usados nesta etapa apenas para conferência, sem alterar saldos.</small>
+   <small class="import-muted">Selecione os seis arquivos: No Estoque, Com Técnico, Confirmação Técnico, Total Disponíveis, Aguardando Reversa e Retirado. O navegador reconhece pelo campo Status e filtra automaticamente apenas CAMPO GRANDE; somente após sua confirmação enviará os dados dos três relatórios ativos ao Supabase. Reversa e Retirado são usados nesta etapa apenas para conferência, sem alterar saldos.</small>
  </div>
  <div id="importStatus" class="import-status" role="status">Nenhuma planilha selecionada. Os dados de 06/11 permanecem no banco.</div>
  <div id="importResults" class="import-details hidden">
@@ -1265,7 +1265,7 @@ async function readConectXlsx(file){
  for(const row of rows.slice(1)){
   const s=cleanSerial(row[col('serial')]);if(!s){withoutSerial++;continue;}
   const base=trimText(row[col('base')]),sap=trimText(row[col('sap')]),status=trimText(row[col('status')]);
-  if(base.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')!=='CAMPO GRANDE')foreign++;
+  if(base.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')!=='CAMPO GRANDE'){foreign++;continue;} // Exportações do Conect misturam filiais; não importar Três Lagoas.
   if(!sap)withoutSAP++;
   out.push({serial:s,base,sap,status,login:col('login')>=0?trimText(row[col('login')]).toUpperCase():'',tecnico:col('tecnico')>=0?trimText(row[col('tecnico')]):''});
  }
@@ -1312,7 +1312,7 @@ function renderConectPreview(){
  const missing=required.filter(k=>!get(k));
  if(missing.length)addLine(warnings,'Faltam '+missing.length+' planilha(s): '+missing.map(previewKind).join(', ')+'.','import-alert');
  if(importWarnings.length)addLine(warnings,importWarnings.join(' | '),'import-alert');
- for(const [key,f] of importsPreview){if(f.foreign)addLine(warnings,`${previewKind(key)}: ${f.foreign} registro(s) com Base diferente de CAMPO GRANDE. Não importar este arquivo.`, 'import-alert');
+ for(const [key,f] of importsPreview){if(f.foreign)addLine(warnings,`${previewKind(key)}: ${f.foreign} registro(s) de outras filiais ignorado(s). Apenas CAMPO GRANDE entra no saldo.`, 'import-status');
   if(f.duplicates)addLine(warnings,`${previewKind(key)}: ${f.duplicates} serial(is) duplicado(s) dentro do arquivo.`, ['reversa','retirado'].includes(key)?'import-status':'import-alert');
   if(f.withoutSerial)addLine(warnings,`${previewKind(key)}: ${f.withoutSerial} linha(s) sem serial descartada(s) da prévia.`, ['reversa','retirado'].includes(key)?'import-status':'import-alert');
   if(f.withoutSAP)addLine(warnings,`${previewKind(key)}: ${f.withoutSAP} linha(s) sem SAP. Manter separado para validação.`, 'import-alert');
@@ -1357,7 +1357,7 @@ function conectValidacao(){
  if(wanted.some(k=>!importsPreview.has(k)))return 'Selecione os seis relatórios do Conect.';
  if(importWarnings.length)return 'Existem arquivos não reconhecidos, repetidos ou com erro de leitura.';
  for(const [k,v] of importsPreview){
-  if(v.foreign)return `${previewKind(k)} contém registros de outra base.`;
+  // Registros de outras filiais já foram excluídos durante a leitura; não bloquear Campo Grande.
   // Reversa/Retirado são ocorrências auxiliares: duplicidades ou linhas sem serial não alteram o saldo ativo.
   if(!['reversa','retirado'].includes(k)&&(v.duplicates||v.withoutSerial))return `${previewKind(k)} tem registros inválidos ou duplicados.`;
  }
