@@ -372,7 +372,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </div>
   <p id="wmsSupplyStatus" class="wms-supply-note" role="status">Envie as fontes para cruzar o que entrou no Atlas e o que ainda não foi entregue. Se tiver um Excel com as abas ATLAS e PLANEJAMENTO, pode selecionar o mesmo arquivo nos dois campos.</p>
  </div>
- <div class="tablebox wms-simple-stock"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Consumo D-1</th><th class="num">Autonomia</th><th class="num">Em trânsito</th><th class="num">Atlas Procisa</th><th class="num">A conferir</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="7">Aguardando Conect.</td></tr></tbody></table></div>
+ <div class="tablebox wms-simple-stock"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Consumo ontem</th><th class="num">Média 7 dias</th><th class="num">Autonomia base</th><th class="num">Em trânsito</th><th class="num">Atlas Procisa</th><th class="num">A conferir</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="8">Aguardando Conect.</td></tr></tbody></table></div>
  <div class="section-note" id="opsFooter">Clique em um equipamento para ver os técnicos, confirmações e a origem das pendências. “A conferir” não é dívida nem entrada confirmada.</div>
  <details class="ops-details wms-extra-data" id="opsExtraDetails"><summary>Outras consultas e ferramentas (opcional)</summary><details class="ops-details"><summary>Conferir seriais entre relatórios</summary><p class="section-note">A lista é investigativa. Seriais que mudaram de posição entre datas diferentes não são automaticamente divergências ou perdas.</p><div id="opsSerialDiff" class="ops-serials">Aguardando dados.</div></details>
  <div class="ops-split">
@@ -630,7 +630,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </div>
   <div class="wms-general-grid">
    <div class="wms-general-kpi"><span>Instalações no D-1</span><strong id="wmsGenInstalled">—</strong><small>Seriais únicos; data da coluna P</small></div>
-   <div class="wms-general-kpi"><span>Consumo diário (D-1)</span><strong id="wmsGenAverage">—</strong><small>Somente o dia anterior à fotografia</small></div>
+   <div class="wms-general-kpi"><span>Média diária (7 dias)</span><strong id="wmsGenAverage">—</strong><small>Sete dias fechados até ontem, divididos por 7</small></div>
    <div class="wms-general-kpi"><span>No estoque · Conect</span><strong id="wmsGenStock">—</strong><small>Não inclui técnicos, aceite nem NNE</small></div>
    <div class="wms-general-kpi wms-general-featured"><span>Autonomia estimada da base</span><strong id="wmsGenAutonomy">—</strong><small>Estoque na base ÷ consumo médio diário</small></div>
   </div>
@@ -645,15 +645,15 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
      <label>Ordenar por <select id="wmsGenModelSort">
        <option value="total">Maior estoque total</option>
        <option value="risk">Menor autonomia na base</option>
-       <option value="usage">Maior consumo diário</option>
+       <option value="usage">Maior média de 7 dias</option>
      </select></label>
    </div>
    <div class="wms-model-legend"><span class="wms-legend-red">Até 5 dias · Crítico</span><span class="wms-legend-amber">Mais de 5 até 6 · Atenção</span><span class="wms-legend-blue">Mais de 6 · Normal</span><span class="wms-legend-muted">— · Sem consumo observado</span></div>
    <div class="wms-model-scroll" role="region" aria-label="Tabela de médias e autonomias por equipamento" tabindex="0"><table class="wms-model-table">
-    <thead><tr><th>Equipamento</th><th>No estoque</th><th>Com técnico</th><th>Confirmação</th><th>Total</th><th>Instalados D-1</th><th>Consumo/dia D-1</th><th>Autonomia total</th><th>Autonomia base</th></tr></thead>
+    <thead><tr><th>Equipamento</th><th>No estoque</th><th>Com técnico</th><th>Confirmação</th><th>Total</th><th>Instalados D-1</th><th>Média diária 7d</th><th>Autonomia total</th><th>Autonomia base</th></tr></thead>
     <tbody id="wmsGenModelRows"><tr><td colspan="9">Aguardando dados do NAtlas e Conect.</td></tr></tbody>
    </table></div>
-   <p class="wms-model-footnote">Consumo de referência = instalações únicas no dia D-1. Autonomia total = (base + técnicos + confirmação) ÷ consumo D-1. Autonomia da base = somente estoque do almoxarifado ÷ consumo D-1. Sem consumo registrado, mostramos “—” para autonomia (não infinito). NNE não é contado.</p>
+   <p class="wms-model-footnote">Consumo D-1 é a contagem somente de ontem. Média 7d = instalações dos sete dias terminados ontem ÷ 7. Autonomia da base = estoque na base ÷ média 7d. Autonomia total considera base + carga confirmada, sem pendências de aceite. Sem histórico completo ou média válida, mostramos “—”.</p>
   </section>
   <p id="wmsGeneralStatus" class="wms-general-note" role="status">Aguardando posição operacional e histórico do NAtlas.</p>
   <div class="wms-modal-bottom"><button type="button" class="btn-ghost" id="wmsGeneralCloseBottom">Fechar</button></div>
@@ -1434,11 +1434,14 @@ function opsLine(label,value){const row=document.createElement('div');row.classN
 
 // Fontes distintas: NAtlas ASSINANTE alimenta consumo; Atlas completo alimenta saldo;
 // Planejamento alimenta trânsito. O cruzamento é uma prévia local, sem baixar nem aumentar estoque.
-let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null;
+let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null,wmsMedia7DiasSaved=null;
 async function wmsD1Load(){
  try{
-  const rows=await apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,atlas_procisa_total,atlas_sem_conect_total,atlas_procisa_sap,atlas_sem_conect_sap,observacao',{order:'referencia.desc'});
-  wmsD1Snapshot=rows[0]||null;
+  const [rows,weekly]=await Promise.all([
+   apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,atlas_procisa_total,atlas_sem_conect_total,atlas_procisa_sap,atlas_sem_conect_sap,observacao',{order:'referencia.desc'}),
+   apiGet('wms_medias_7dias','referencia,periodo_inicio,periodo_fim,instalacoes_total,instalacoes_sap,arquivo_origem',{order:'referencia.desc'})
+  ]);
+  wmsD1Snapshot=rows[0]||null;wmsMedia7DiasSaved=weekly[0]||null;
   wmsSupplyRenderStatus();renderOperations();
   if($('wmsGeneralModal').open)wmsGeneralRender();
  }catch(error){
@@ -1542,6 +1545,40 @@ function wmsSupplyPlanParse(rows){
  }
  return out;
 }
+// Bot Atlas: dias fechados [fotografia-7, fotografia-1], dividido por 7.
+// Nunca substituir dados ausentes por consumo zero.
+function wmsSevenDaySource(reference){
+ if(!reference)return null;
+ const start=wmsDateOffset(reference,-7),end=wmsDateOffset(reference,-1);
+ const selected=typeof dailyCandidate!=='undefined'?dailyCandidate:null;
+ const completePreview=selected?.file?.name&&wmsBatchDate(selected.file.name)===reference&&
+  selected.linhas?.length&&!wmsNatlasSomenteAssinantes();
+ let counts=null,source='';
+ if(completePreview){
+  const unique=new Map();
+  for(const x of selected.linhas){
+   if(x.local!=='ASSINANTE'||x.tipo_local!=='ASSINANTE')continue;
+   const date=x.data_instalacao,serial=cleanSerial(x.serial),sap=displaySap(x.sap);
+   if(serial&&sap&&date&&date>=start&&date<=end)unique.set(serial,sap);
+  }
+  counts=new Map();
+  for(const sap of unique.values())counts.set(sap,(counts.get(sap)||0)+1);
+  source='prévia do NAtlas completo (ainda não gravada)';
+ }else if(wmsMedia7DiasSaved?.referencia===reference&&
+    wmsMedia7DiasSaved?.periodo_inicio===start&&wmsMedia7DiasSaved?.periodo_fim===end){
+  counts=new Map();
+  for(const [sap,v] of Object.entries(wmsMedia7DiasSaved.instalacoes_sap||{})){
+   const n=Number(v);if(Number.isSafeInteger(n)&&n>=0)counts.set(displaySap(sap),n);
+  }
+  source='NAtlas completo confirmado';
+ }else return null;
+ const means=new Map();let total=0;
+ for(const [sap,n] of counts){
+  total+=n;const model=nomeModeloSap(sap);means.set(model,(means.get(model)||0)+n/7);
+ }
+ return {means,total,source,start,end};
+}
+
 function wmsSupplyD1Counts(reference){
  if(!reference)return null;
  const d1=wmsDateOffset(reference,-1);
@@ -1634,7 +1671,7 @@ function renderOperations(){
  else extras.textContent='Reversa e retirados ficam fora do saldo ativo. Os detalhes devem estar no HOPE após a carga inicial.';
  $('opsLimit').textContent=hasData?'Quantidades informadas pelo Conect, não uma contagem física.':'Selecione os arquivos em Atualizações para ver o estoque.';
  const reference=opsReference||null;
- const d1=wmsSupplyD1Counts(reference),atlas=wmsAtlasFull,plan=wmsSupplyPlan;
+ const d1=wmsSupplyD1Counts(reference),weekly=wmsSevenDaySource(reference),atlas=wmsAtlasFull,plan=wmsSupplyPlan;
  const recent=atlas?.rows||[];
  const knownSerials=new Set(opsPositions.map(x=>cleanSerial(x.numero_serie)));
  const pendingByModel=new Map();
@@ -1667,16 +1704,18 @@ function renderOperations(){
  for(const g of list){
   const installs=d1?.get(g.code),pending=pendingByModel.get(g.code)||[],planned=planByModel.get(g.code);
   const pendingCount=atlas?pending.length:pendingCountByModel.get(g.code);
-  const days=installs>0?g.no_estoque/installs:null;
+  const mean=weekly?.means.get(g.code);
+  const days=mean>0?g.no_estoque/mean:null;
   const atlasCount=atlasByModel.get(g.code);
   const tr=document.createElement('tr');
   const cells=[[g.code,'code'],[pt(g.no_estoque),'num'],[d1===null?'—':pt(installs||0),'num'],
+   [weekly===null?'—':decimal(mean||0),'num'],
    [days===null?'—':decimal(days)+' d','num'],
    [plan===null?(wmsD1Snapshot?.referencia===reference?pt(wmsD1Snapshot.nne_eter_em_transito??0):'—'):pt(planned||0),'num'],
    [atlasCount==null?'—':pt(atlasCount),'num'],
    [pendingCount==null?'—':pt(pendingCount),'num']];
   const detail=document.createElement('tr');detail.className='wms-stock-extra';detail.hidden=true;
-  const extra=document.createElement('td');extra.colSpan=7;
+  const extra=document.createElement('td');extra.colSpan=8;
   const note=document.createElement('div');note.className='wms-stock-extra-content';
   const tips=[
    'Com técnicos: '+pt(g.com_tecnico)+' · Aguardando aceite: '+pt(g.confirmacao)+
@@ -1710,9 +1749,10 @@ function renderOperations(){
   }
   body.append(tr,detail);
  }
- if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=7;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
- $('opsFooter').textContent='Conect '+(reference||'sem data')+' · Consumo do dia anterior'+(d1===null?' ainda não confirmado.':'.')+
-  ' · Consumo D-1 refere-se a '+(reference?wmsDateOffset(reference,-1):'dia anterior')+'; o estoque e o Atlas são fotografias de posição. “A conferir” não significa dívida comprovada.';
+ if(!list.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=8;td.className='empty';td.textContent='Nenhum equipamento encontrado.';tr.append(td);body.append(tr)}
+ $('opsFooter').textContent='Conect '+(reference||'sem data')+' · consumo de ontem '+(d1===null?'não confirmado':'conferido')+
+  ' · média 7 dias '+(weekly===null?'NÃO VALIDADA (falta relatório NAtlas completo dos 7 dias fechados)':'calculada de '+weekly.start+' até '+weekly.end)+
+  '. Autonomia só é estimada com média válida. Traço (—) significa falta de dados, não zero.';
  renderOpsSerialDetails(null);renderOpsRankings();renderOpsKitSelectors();
 }
 function renderOpsSerialDetails(code){
@@ -2435,7 +2475,8 @@ function wmsGeneralRender(){
   $('wmsGeneralFreshnessMessage').textContent='O Conect já está em '+wmsGenDateText(reference)+', mas o último NAtlas gravado é de '+wmsGenDateText(dailyLatestReference)+'. O consumo D-1 está indisponível, não é zero. Selecione o NAtlas completo de '+wmsGenDateText(reference)+' em Atualizações; não precisa reenviar os seis KPI do Conect.';
  }
  // Em uma janela de um único dia, consumo médio/dia = instalações do próprio dia.
- const avg=installed;
+ const weekly=wmsSevenDaySource(reference);
+ const avg=weekly?weekly.total/7:null;
  const hasBase=opsCurrentFromDB&&opsPositions.length>0;
  const groups=new Map();
  const group=name=>{
@@ -2480,8 +2521,8 @@ function wmsGeneralRender(){
  for(const g of models){
   g.total=g.base+g.tech+g.pending;
   g.installed=g.events.length+(g.fromSnapshot||0);
-  g.avg=installed===null?null:g.installed;
-  g.autonomyTotal=hasBase&&g.avg>0?g.total/g.avg:null;
+  g.avg=weekly===null?null:(weekly.means.get(g.name)||0);
+  g.autonomyTotal=hasBase&&g.avg>0?(g.base+g.tech)/g.avg:null;
   g.autonomyBase=hasBase&&g.avg>0?g.base/g.avg:null;
  }
  const base=hasBase?models.reduce((a,g)=>a+g.base,0):null;
@@ -2543,11 +2584,12 @@ function wmsGeneralRender(){
   }
   full.append(sapLines);
   const formula=document.createElement('div');
-  formula.textContent=installed===null?'Não há dados suficientes para calcular o consumo D-1.':
-   g.installed+' instalações em 1 dia = '+decimal(g.avg)+' equipamento(s)/dia. Autonomia total: '+
+  formula.textContent=installed===null?'Consumo de ontem não confirmado.':weekly===null?
+   g.installed+' instalações ontem; média 7 dias e autonomia ainda sem histórico completo.':
+   g.installed+' instalações ontem. Média dos últimos 7 dias: '+decimal(g.avg)+' equipamento(s)/dia. Autonomia total: '+
    (g.autonomyTotal===null?'não calculável':decimal(g.autonomyTotal)+' dias')+
    '; autonomia no almoxarifado: '+(g.autonomyBase===null?'não calculável':decimal(g.autonomyBase)+' dias')+
-   '. Com zero instalações registradas no D-1, a autonomia não pode ser estimada.';
+   '. Com média semanal igual a zero, a autonomia não pode ser estimada.';
   full.append(formula);detail.append(full);body.append(detail);
   toggle.addEventListener('click',()=>{detail.hidden=!detail.hidden;toggle.textContent=detail.hidden?'+':'−';toggle.setAttribute('aria-expanded',String(!detail.hidden));});
  }
@@ -2556,7 +2598,7 @@ function wmsGeneralRender(){
  const sourceCompared=validEvents.filter(x=>x.source==='diário').length;
  let note='';
  if(!reference)note='Nenhuma fotografia confirmada do Conect/NAtlas para estabelecer a referência D-1. Os traços não representam consumo zero.';
- else if(confirmedD1)note='Consumo de '+wmsGenDateText(targetDay)+' conferido em dois relatórios: '+pt(confirmedD1.instalacoes_total)+' seriais ASSINANTE únicos, agrupados por SAP. Estoque do Conect de '+wmsGenDateText(reference)+'. A autonomia considera apenas esse consumo D-1; não é uma média histórica. NNE: '+pt(confirmedD1.nne_eter_em_transito??0)+' equipamento(s) ETER em trânsito; insumos não entram no estoque de equipamentos. O histórico completo de serial continua preservado nas planilhas originais.';
+ else if(confirmedD1)note='Consumo de '+wmsGenDateText(targetDay)+' conferido em dois relatórios: '+pt(confirmedD1.instalacoes_total)+' seriais ASSINANTE únicos. Essa contagem não é a média. NNE: '+pt(confirmedD1.nne_eter_em_transito??0)+' equipamento(s) ETER em trânsito.';
  else if(!hasNatlas)note='Consumo D-1 ainda NÃO validado. O Conect registra a fotografia de '+wmsGenDateText(reference)+', mas a última fotografia completa do NAtlas gravada no banco é de '+wmsGenDateText(dailyLatestReference)+'. O valor antigo de 13 não representa o NAtlas de 10/11. Importe o NAtlas desse dia (sem duplicar o Conect) ou selecione-o em Atualizações para conferir a PRÉVIA.';
  else {
   note='Consumo D-1: somente seriais em ASSINANTE com data da coluna P igual a '+wmsGenDateText(targetDay)+'. '+(usePreview?'PRÉVIA DO ARQUIVO COMPLETO SELECIONADO: valores ainda não gravados no Supabase. ':'Fontes gravadas: '+sourceLegacy+' serial(is) do histórico NAtlas e '+sourceCompared+' do cruzamento diário, deduplicados por serial. ')+
@@ -2570,6 +2612,7 @@ function wmsGeneralRender(){
   if(installed===0)note+='Sem instalações registradas nesse dia; autonomia indisponível, não infinita.';
  }
  if(opsCurrentFromDB&&Number(opsLatestResumo?.quarentena||0)>0)note+=' No Conect, '+Number(opsLatestResumo.quarentena)+' seriais estão em quarentena por identificação inválida e não entram como disponíveis na base.';
+ note+=' Média diária: '+(weekly?'7 dias fechados ('+wmsGenDateText(weekly.start)+' a '+wmsGenDateText(weekly.end)+'), '+weekly.source+'.':'NÃO VALIDADA, falta NAtlas completo com 7 dias fechados até ontem. Autonomia indisponível.');
  $('wmsGeneralStatus').textContent=note;
 }
 
