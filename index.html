@@ -2435,7 +2435,7 @@ function wmsBotBuildCandidate(matrizRows,atlasRows,baixadosRows,diarioRows,saldo
  const porTipo=new Map(),saldoMatriz=new Map(),tipoSaps=new Map();
  const inc=(map,key,n)=>map.set(key,(map.get(key)||0)+n);
  const addSap=(tipo,sap)=>{if(!sap)return;let set=tipoSaps.get(tipo);if(!set){set=new Set();tipoSaps.set(tipo,set)}set.add(sap)};
- const ndSeriais=new Set(),matrizSeriais=new Set();
+ const ndSeriais=new Set(),ndTipos=new Map(),matrizSeriais=new Set();
  let nd=0,suspeitos=0,foraTipo=0,matrizValidos=0,removidos=0;
  for(const r of matrizRows.slice(1)){
   const tipo=wmsBotNormalizeType(r.row[mc.tipo]),serial=cleanSerial(r.row[mc.serial]);
@@ -2448,7 +2448,7 @@ function wmsBotBuildCandidate(matrizRows,atlasRows,baixadosRows,diarioRows,saldo
   if(estado==='INICIALIZADO'){inc(saldoMatriz,tipo,1);continue;}
   removidos++;
   if(estado==='N/D'){
-   ndSeriais.add(serial);nd++;
+   ndSeriais.add(serial);ndTipos.set(serial,tipo);nd++;
    inc(porTipo,tipo,1);
   }else if(estado==='SUSPEITO')suspeitos++;
  }
@@ -2459,10 +2459,17 @@ function wmsBotBuildCandidate(matrizRows,atlasRows,baixadosRows,diarioRows,saldo
   const serial=cleanSerial(r.row[bc.serial]);if(!serial)continue;
   const tipo=wmsBotNormalizeType(r.row[bc.tipo]),day=wmsBotFimData(r.row[bc.data]);
   if(!day)continue;
-  linhasHistorico++;ultimaData=day;historicoSeriais.add(serial);
+  if(historicoSeriais.has(serial))continue; // Um serial só pode ser baixado uma vez no histórico.
+  linhasHistorico++;ultimaData=!ultimaData||day>ultimaData?day:ultimaData;historicoSeriais.add(serial);
   if(day>=wmsDateOffset(reference,-30)&&day<reference)baixas30++;
   if(day>=inicio&&day<=fim){inc(porTipo,tipo,1);baixasHistorico++;}
  }
+ const historicosRepetidos=[...ndSeriais].filter(serial=>historicoSeriais.has(serial)).length;
+ for(const [serial,tipo] of ndTipos){
+  if(!historicoSeriais.has(serial))continue;
+  nd--;inc(porTipo,tipo,-1); // Já foi contabilizado em BAIXADOS: não somar novamente como N/D.
+ }
+ for(const [tipo,qtd] of porTipo)if(qtd===0)porTipo.delete(tipo);
  if(!linhasHistorico||!ultimaData)throw Error('BAIXADOS ASSINANTES sem histórico datado.');
  if(ultimaData>=reference)throw Error('O histórico de baixas contém data posterior à fotografia.');
  const proximo=wmsDateOffset(ultimaData,1);
@@ -2484,7 +2491,6 @@ function wmsBotBuildCandidate(matrizRows,atlasRows,baixadosRows,diarioRows,saldo
  const total=[...porTipo.values()].reduce((a,n)=>a+n,0);
  const values=map=>Object.fromEntries([...map].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')));
  const mapping=Object.fromEntries([...tipoSaps].filter(([tipo])=>porTipo.has(tipo)).map(([tipo,set])=>[tipo,[...set].sort()]));
- const historicosRepetidos=[...ndSeriais].filter(s=>historicoSeriais.has(s)).length;
  return {referencia:reference,periodo_inicio:inicio,periodo_fim:fim,baixados_historico:baixasHistorico,
   novos_nd:nd,baixados_total:total,por_tipo:values(porTipo),saldo_matriz:values(saldoMatriz),tipo_saps:mapping,
   repetidos_historico:historicosRepetidos,suspeitos,removidos,atlas_rows:rowsCity,matriz_rows:matrizValidos,
