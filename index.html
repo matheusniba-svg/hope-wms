@@ -250,6 +250,16 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .tech-access-table-wrap td,.tech-access-table-wrap th{border-bottom:1px solid #385365;padding:8px;font-size:11px;text-align:left}
 .tech-access-table-wrap td:last-child{font-family:ui-monospace,monospace;letter-spacing:.7px;color:#8becce;font-weight:800}
 
+/* Reconstrução do cálculo do bot Atlas, sem sobrescrever o estoque operacional. */
+.wms-bot-mean-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:13px 16px;border:1px solid #3b586d;border-radius:10px;background:#0e2638;margin:12px 0}
+.wms-bot-mean-banner[hidden]{display:none}
+.wms-bot-mean-banner>div:first-child{display:grid;gap:5px;flex:1;min-width:220px}
+.wms-bot-mean-banner strong{font-size:13px}
+.wms-bot-mean-banner small{font-size:11px;line-height:1.55;color:#b5ceda}
+.wms-bot-mean-number{display:flex;align-items:baseline;gap:6px}
+.wms-bot-mean-number strong{font-size:25px}
+.wms-bot-mean-number span{font-size:11px;color:#c4dae4}
 /* Estoque operacional inspirado na planilha, com detalhes apenas sob demanda */
 #operationalPanel .wms-simple-stock{max-width:1080px;width:100%}
 #operationalPanel .wms-simple-stock table{table-layout:fixed;min-width:760px}
@@ -376,7 +386,11 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   </div>
   <p id="wmsSupplyStatus" class="wms-supply-note" role="status">Envie as fontes para cruzar o que entrou no Atlas e o que ainda não foi entregue. Se tiver um Excel com as abas ATLAS e PLANEJAMENTO, pode selecionar o mesmo arquivo nos dois campos.</p>
  </div>
- <div class="tablebox wms-simple-stock"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Consumo ontem</th><th class="num">Média 7 dias</th><th class="num">Autonomia base</th><th class="num">Em trânsito</th><th class="num">Atlas Procisa</th><th class="num">A conferir</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="8">Aguardando Conect.</td></tr></tbody></table></div>
+ <div class="wms-bot-mean-banner" id="wmsBotMediaBanner" hidden aria-live="polite">
+ <div><strong>Média conforme regra do bot Atlas</strong><small id="wmsBotMediaInfo">Conferindo o histórico...</small></div>
+ <div class="wms-bot-mean-number"><strong id="wmsBotMediaDaily">—</strong><span>equipamentos/dia</span></div>
+</div>
+<div class="tablebox wms-simple-stock"><table><thead><tr><th>Equipamento</th><th class="num">Na base</th><th class="num">Consumo ontem</th><th class="num">Média 7 dias</th><th class="num">Autonomia base</th><th class="num">Em trânsito</th><th class="num">Atlas Procisa</th><th class="num">A conferir</th></tr></thead><tbody id="opsRows"><tr><td class="empty" colspan="8">Aguardando Conect.</td></tr></tbody></table></div>
  <div class="section-note" id="opsFooter">Clique em um equipamento para ver os técnicos, confirmações e a origem das pendências. “A conferir” não é dívida nem entrada confirmada.</div>
  <details class="ops-details wms-extra-data" id="opsExtraDetails"><summary>Outras consultas e ferramentas (opcional)</summary><details class="ops-details"><summary>Conferir seriais entre relatórios</summary><p class="section-note">A lista é investigativa. Seriais que mudaram de posição entre datas diferentes não são automaticamente divergências ou perdas.</p><div id="opsSerialDiff" class="ops-serials">Aguardando dados.</div></details>
  <div class="ops-split">
@@ -1438,14 +1452,36 @@ function opsLine(label,value){const row=document.createElement('div');row.classN
 
 // Fontes distintas: NAtlas ASSINANTE alimenta consumo; Atlas completo alimenta saldo;
 // Planejamento alimenta trânsito. O cruzamento é uma prévia local, sem baixar nem aumentar estoque.
-let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null,wmsMedia7DiasSaved=null;
+let wmsAtlasFull=null,wmsSupplyPlan=null,wmsD1Snapshot=null,wmsMedia7DiasSaved=null,wmsBotMediaSnapshot=null;
+function wmsBotTipoSap(sap){
+ const code=displaySap(sap||'');
+ const snapshot=wmsBotMediaSnapshot;
+ if(!snapshot||snapshot.referencia!==opsReference||!code)return null;
+ for(const [tipo,codes] of Object.entries(snapshot.tipo_saps||{})){
+  if(Array.isArray(codes)&&codes.includes(code))return tipo;
+ }
+ return null;
+}
+function wmsBotGroups(){
+ const groups=new Map();
+ for(const p of opsPositions){
+  const tipo=wmsBotTipoSap(p.codigo_sap)||nomeModeloSap(p.codigo_sap);
+  let g=groups.get(tipo);
+  if(!g){g={code:tipo,description:'',no_estoque:0,com_tecnico:0,confirmacao:0,serials:[]};groups.set(tipo,g)}
+  if(['no_estoque','com_tecnico','confirmacao'].includes(p.situacao))g[p.situacao]++;
+  g.serials.push(p.numero_serie);
+ }
+ return groups;
+}
+
 async function wmsD1Load(){
  try{
-  const [rows,weekly]=await Promise.all([
+  const [rows,weekly,botSources]=await Promise.all([
    apiGet('wms_d1_fotografias','referencia,dia_consumo,instalacoes_total,instalacoes_sap,nne_eter_em_transito,nne_emis_em_transito,atlas_procisa_total,atlas_sem_conect_total,atlas_procisa_sap,atlas_sem_conect_sap,observacao',{order:'referencia.desc'}),
-   apiGet('wms_medias_7dias','referencia,periodo_inicio,periodo_fim,instalacoes_total,instalacoes_sap,arquivo_origem',{order:'referencia.desc'})
+   apiGet('wms_medias_7dias','referencia,periodo_inicio,periodo_fim,instalacoes_total,instalacoes_sap,arquivo_origem',{order:'referencia.desc'}),
+   apiGet('wms_bot_media_7dias','referencia,periodo_inicio,periodo_fim,baixados_historico,novos_nd,baixados_total,por_tipo,saldo_matriz,tipo_saps,observacao,qualidade',{order:'referencia.desc'})
   ]);
-  wmsD1Snapshot=rows[0]||null;wmsMedia7DiasSaved=weekly[0]||null;
+  wmsD1Snapshot=rows[0]||null;wmsMedia7DiasSaved=weekly[0]||null;wmsBotMediaSnapshot=botSources[0]||null;
   wmsSupplyRenderStatus();renderOperations();
   if($('wmsGeneralModal').open)wmsGeneralRender();
  }catch(error){
@@ -1554,6 +1590,16 @@ function wmsSupplyPlanParse(rows){
 function wmsSevenDaySource(reference){
  if(!reference)return null;
  const start=wmsDateOffset(reference,-7),end=wmsDateOffset(reference,-1);
+ const bot=wmsBotMediaSnapshot;
+ if(bot?.referencia===reference&&bot.periodo_inicio===start&&bot.periodo_fim===end){
+  const means=new Map();let count=0;
+  for(const [tipo,quantidade] of Object.entries(bot.por_tipo||{})){
+   const n=Number(quantidade);if(!Number.isSafeInteger(n)||n<0)continue;
+   count+=n;means.set(tipo,n/7);
+  }
+  if(count!==Number(bot.baixados_total))return null;
+  return {means,total:count,start,end,bot:true,source:'reconstrução do cálculo do bot com BAIXADOS + Matriz + Atlas'};
+ }
  const selected=typeof dailyCandidate!=='undefined'?dailyCandidate:null;
  const completePreview=selected?.file?.name&&wmsBatchDate(selected.file.name)===reference&&
   selected.linhas?.length&&!wmsNatlasSomenteAssinantes()&&
@@ -1698,7 +1744,16 @@ function renderOperations(){
  const counts={no_estoque:0,com_tecnico:0,confirmacao:0};
  for(const p of opsPositions){if(Object.hasOwn(counts,p.situacao))counts[p.situacao]++;}
  $('opsBase').textContent=opsPositions.length?pt(counts.no_estoque):'—';$('opsField').textContent=opsPositions.length?pt(counts.com_tecnico):'—';$('opsPending').textContent=opsPositions.length?pt(counts.confirmacao):'—';$('opsTotal').textContent=opsPositions.length?pt(new Set(opsPositions.map(x=>x.numero_serie)).size):'—';
- const hasData=opsPositions.length>0, codeGroups=opsCurrentGroups(),hist=opsOriginalMatrix(),seen=opsInstallationCounts(),safeSameDate=opsReference==='2026-11-06';
+ const botCurrent=!!(wmsBotMediaSnapshot?.referencia===opsReference&&opsCurrentFromDB);
+ const hasData=opsPositions.length>0, codeGroups=botCurrent?wmsBotGroups():opsCurrentGroups(),hist=opsOriginalMatrix(),seen=opsInstallationCounts(),safeSameDate=opsReference==='2026-11-06';
+ const banner=$('wmsBotMediaBanner');banner.hidden=!botCurrent;
+ if(botCurrent){
+  $('wmsBotMediaDaily').textContent=decimal(wmsBotMediaSnapshot.baixados_total/7);
+  $('wmsBotMediaInfo').textContent=wmsBotMediaSnapshot.baixados_total+' baixas nos 7 dias ('+
+   wmsBotMediaSnapshot.periodo_inicio+' a '+wmsBotMediaSnapshot.periodo_fim+') ÷ 7. '+
+   'Apuração reconstruída: '+wmsBotMediaSnapshot.baixados_historico+' históricas + '+wmsBotMediaSnapshot.novos_nd+
+   ' N/D. O lote N/D não comprova datas individuais de instalação.';
+ }
  $('opsBadge').className='status-chip '+(opsCurrentFromDB?'okay':'warning');$('opsBadge').textContent=opsCurrentFromDB?'Confirmado no banco':hasData?'Prévia não gravada':'Aguardando Conect';
  $('opsOrigin').className='ops-origin'+(!opsCurrentFromDB?' ops-preview':'');
  $('opsOrigin').textContent=hasData?`Conect de ${opsReference?opsReference.slice(8,10)+'/'+opsReference.slice(5,7)+'/'+opsReference.slice(0,4):'data não informada'} · ${opsCurrentFromDB?'dados salvos':'prévia não salva'}`:'Estoque ainda não carregado. Envie os relatórios em Atualizações.';
@@ -2463,6 +2518,8 @@ function wmsDateOffset(ymd,delta){
 function wmsGenKey(sap){
  const code=displaySap(sap||'').trim();
  if(!code)return 'SEM SAP';
+ const bot=wmsBotTipoSap(code);
+ if(bot)return bot;
  const label=nomeModeloSap(code);
  return label==='MODELO NÃO IDENTIFICADO'?'SAP '+code:label;
 }
