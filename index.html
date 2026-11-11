@@ -432,7 +432,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="import-drop">
   <label for="wmsBatchFiles"><strong>1. Selecione todas as planilhas do dia de uma vez</strong></label>
   <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Escolher relatórios do dia" />
-  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx. O HOPE identifica cada arquivo pelo nome.</small>
+  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx + MEDIA SERIAIS. O HOPE identifica cada arquivo pelo nome.</small>
  </div>
  <div class="wms-batch-grid">
   <div class="wms-batch-tile"><small>Conect — seis relatórios</small><strong id="wmsBatchConectStat">Aguardando</strong><span id="wmsBatchConectDetail">Sem arquivos</span></div>
@@ -451,7 +451,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <button class="btn-ghost" id="wmsBatchAdvanced" type="button" aria-expanded="false">Mostrar detalhes avançados</button>
  </div>
  <div class="wms-bot-import">
- <div><strong>Média do bot Atlas · 7 dias</strong><p id="wmsBotImportStatus" role="status" aria-live="polite">Inclua Matriz, BAIXADOS ASSINANTES e Relatorio atlas.xlsx na seleção acima. A conferência será feita por serial e data, sem alterar o estoque.</p></div>
+ <div><strong>Média do bot Atlas · 7 dias</strong><p id="wmsBotImportStatus" role="status" aria-live="polite">Inclua Matriz, BAIXADOS ASSINANTES, Relatorio atlas.xlsx e MEDIA SERIAIS na seleção acima. A conferência será feita por serial e data, sem alterar o estoque.</p></div>
  <button class="btn-ghost" id="wmsBotImportSave" type="button" disabled>Registrar média conferida</button>
  </div>
  <p id="wmsBatchProgress" class="helper" role="status" aria-live="polite">O botão principal fará o Conect primeiro e depois o NAtlas. Consumo por técnico usa a coluna P e mantém a atribuição por serial.</p>
@@ -2395,6 +2395,173 @@ function wmsBatchAssign(id,files){
  const t=new DataTransfer();files.forEach(f=>t.items.add(f));
  const el=$(id);el.files=t.files;el.dispatchEvent(new Event('change',{bubbles:true}));
 }
+
+// Reprodução da rotina principal do bot_atlas.py: GERAL B x Atlas Endereçável Principal F,
+// somente N/D é baixa; histórico BAIXADOS C fornece as datas e a janela é [D-7,D-1].
+function wmsBotFimData(raw){
+ const text=String(raw??'').trim();
+ const dates=[...text.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+ if(dates.length){const v=dates.at(-1);return wmsExcelInstalacao(v[0]);}
+ return wmsExcelInstalacao(text);
+}
+function wmsBotNormalizeType(t){
+ return String(t??'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ');
+}
+function wmsBotBuildCandidate(matrizRows,atlasRows,baixadosRows,diarioRows,saldoAtlasRows,reference){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(reference))throw Error('A data da fotografia precisa estar definida pelos arquivos Conect.');
+ const readCols=(rows,required)=>{
+  if(!rows.length)throw Error('Uma das planilhas está sem conteúdo.');
+  const header=rows[0].row.map(wmsNorm),result={};
+  for(const [key,aliases] of Object.entries(required)){
+   const i=wmsTabColumn(header,aliases);
+   if(i<0)throw Error('Coluna '+aliases[0]+' ausente em uma das fontes.');
+   result[key]=i;
+  }
+  return result;
+ };
+ const mc=readCols(matrizRows,{tipo:['TIPO'],serial:['SERIAL'],sap:['SAP']});
+ const ac=readCols(atlasRows,{enderecavel:['Endereçavel Principal'],estado:['Estado'],operacao:['Operação']});
+ const bc=readCols(baixadosRows,{tipo:['TIPO'],serial:['SERIAL'],data:['DATA']});
+ const dc=readCols(diarioRows,{tipo:['TIPO']});
+ const knownTypes=new Set(diarioRows.slice(1).map(r=>wmsBotNormalizeType(r.row[dc.tipo])).filter(Boolean));
+ const latestAtlas=new Map();let rowsCity=0;
+ for(const r of atlasRows.slice(1)){
+  if(wmsNorm(r.row[ac.operacao]||'')!=='CAMPO GRANDE')continue;
+  rowsCity++;
+  const serial=cleanSerial(r.row[ac.enderecavel]);
+  if(serial&&!latestAtlas.has(serial))latestAtlas.set(serial,wmsNorm(r.row[ac.estado]||'')||'N/D');
+ }
+ if(rowsCity<1000)throw Error('O Relatorio atlas está incompleto: menos de mil linhas de Campo Grande. Nenhum registro foi gravado.');
+ const porTipo=new Map(),saldoMatriz=new Map(),tipoSaps=new Map();
+ const inc=(map,key,n)=>map.set(key,(map.get(key)||0)+n);
+ const addSap=(tipo,sap)=>{if(!sap)return;let set=tipoSaps.get(tipo);if(!set){set=new Set();tipoSaps.set(tipo,set)}set.add(sap)};
+ const ndSeriais=new Set(),matrizSeriais=new Set();
+ let nd=0,suspeitos=0,foraTipo=0,matrizValidos=0,removidos=0;
+ for(const r of matrizRows.slice(1)){
+  const tipo=wmsBotNormalizeType(r.row[mc.tipo]),serial=cleanSerial(r.row[mc.serial]);
+  if(!tipo||!serial)continue;
+  const sap=displaySap(r.row[mc.sap]);
+  if(matrizSeriais.has(serial))continue;
+  matrizSeriais.add(serial);matrizValidos++;
+  addSap(tipo,sap);
+  const estado=latestAtlas.get(serial)||'N/D';
+  if(estado==='INICIALIZADO'){inc(saldoMatriz,tipo,1);continue;}
+  removidos++;
+  if(estado==='N/D'){
+   ndSeriais.add(serial);nd++;
+   inc(porTipo,tipo,1);
+  }else if(estado==='SUSPEITO')suspeitos++;
+ }
+ if(matrizValidos<100)throw Error('Matriz GERAL parece incompleta. Cálculo bloqueado.');
+ const fim=wmsDateOffset(reference,-1),inicio=wmsDateOffset(reference,-7);
+ const historicoSeriais=new Set();let ultimaData=null,baixasHistorico=0,baixas30=0,linhasHistorico=0;
+ for(const r of baixadosRows.slice(1)){
+  const serial=cleanSerial(r.row[bc.serial]);if(!serial)continue;
+  const tipo=wmsBotNormalizeType(r.row[bc.tipo]),day=wmsBotFimData(r.row[bc.data]);
+  if(!day)continue;
+  linhasHistorico++;ultimaData=day;historicoSeriais.add(serial);
+  if(day>=wmsDateOffset(reference,-30)&&day<reference)baixas30++;
+  if(day>=inicio&&day<=fim){inc(porTipo,tipo,1);baixasHistorico++;}
+ }
+ if(!linhasHistorico||!ultimaData)throw Error('BAIXADOS ASSINANTES sem histórico datado.');
+ if(ultimaData>=reference)throw Error('O histórico de baixas contém data posterior à fotografia.');
+ const proximo=wmsDateOffset(ultimaData,1);
+ if(nd&&proximo>fim)throw Error('O histórico já chega até ontem e há N/D novos. Precisa revisar as baixas para evitar repetição.');
+ const diasRodada=nd?Math.max(1,Math.round((Date.parse(fim+'T12:00:00Z')-Date.parse(proximo+'T12:00:00Z'))/86400000)+1):1;
+ const volumeLimite=Math.max(60,3*(baixas30/30)*diasRodada);
+ if(removidos>volumeLimite||removidos>matrizValidos*.25)
+  throw Error('Trava do bot: '+removidos+' remoções excedem o limite de segurança ('+Math.floor(volumeLimite)+' ou 25% da Matriz). Nenhum dado foi gravado.');
+ // Confere presença do tipo na aba DIARIO: sem linha, a fórmula MEDIADIA do bot não o exibiria.
+ const ignorados=[...porTipo.keys()].filter(t=>!knownTypes.has(t));
+ if(ignorados.length)throw Error('Tipo com consumo e sem linha na DIARIO: '+ignorados.join(', ')+'. Ajuste a origem antes de registrar uma média incompleta.');
+ for(const r of saldoAtlasRows.slice(1)){
+  const tipo=wmsBotNormalizeType(r.row[0]);if(!knownTypes.has(tipo))continue;
+  for(const v of r.row.slice(1)){
+   const sap=displaySap(v);
+   if(/^\d{5,11}$/.test(sap))addSap(tipo,sap);
+  }
+ }
+ const total=[...porTipo.values()].reduce((a,n)=>a+n,0);
+ const values=map=>Object.fromEntries([...map].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')));
+ const mapping=Object.fromEntries([...tipoSaps].filter(([tipo])=>porTipo.has(tipo)).map(([tipo,set])=>[tipo,[...set].sort()]));
+ const historicosRepetidos=[...ndSeriais].filter(s=>historicoSeriais.has(s)).length;
+ return {referencia:reference,periodo_inicio:inicio,periodo_fim:fim,baixados_historico:baixasHistorico,
+  novos_nd:nd,baixados_total:total,por_tipo:values(porTipo),saldo_matriz:values(saldoMatriz),tipo_saps:mapping,
+  repetidos_historico:historicosRepetidos,suspeitos,removidos,atlas_rows:rowsCity,matriz_rows:matrizValidos,
+  intervalo_inicio:proximo,intervalo_fim:fim,volume_limite:Math.floor(volumeLimite),qualidade:'reconstrucao'};
+}
+async function wmsBotPreviewFiles(){
+ const sel=wmsBatchSelection,box=$('wmsBotImportStatus'),button=$('wmsBotImportSave');
+ wmsBotImportCandidate=null;button.disabled=true;
+ if(!sel.matriz||!sel.atlas_bot||!sel.baixados_bot||!sel.media_bot){
+  box.textContent='Para a mesma média do bot, inclua: INICIALIZADOS MATRIZ, BAIXADOS ASSINANTES, Relatorio atlas.xlsx e MEDIA SERIAIS. Os seis KPI do Conect continuam separados para o saldo.';
+  return;
+ }
+ const reference=$('wmsBatchDateInput').value||opsReference;
+ if(!reference){box.textContent='Selecione também os seis KPI do Conect para identificar a data da fotografia.';return;}
+ box.textContent='Lendo as quatro fontes e cruzando os números de série localmente. Nenhum dado foi gravado.';
+ try{
+  const [matriz,atlas,baixados,diario,saldoAtlas,hashes]=await Promise.all([
+   wmsNamedSheetRows(sel.matriz,'GERAL'),wmsSheetRows(sel.atlas_bot),
+   wmsSheetRows(sel.baixados_bot),wmsNamedSheetRows(sel.media_bot,'DIARIO'),
+   wmsNamedSheetRows(sel.media_bot,'SALDO ATLAS'),
+   Promise.all([sel.matriz,sel.atlas_bot,sel.baixados_bot,sel.media_bot].map(wmsHash))
+  ]);
+  const data=wmsBotBuildCandidate(matriz,atlas,baixados,diario,saldoAtlas,reference);
+  if(sel!==wmsBatchSelection)return;
+  data.arquivos={matriz:sel.matriz.name,atlas:sel.atlas_bot.name,baixados:sel.baixados_bot.name,media:sel.media_bot.name,
+    hashes:{matriz:hashes[0],atlas:hashes[1],baixados:hashes[2],media:hashes[3]}};
+  data.observacao='Reprodução da regra do bot Atlas. '+data.baixados_historico+' baixas no histórico e '+data.novos_nd+
+    ' N/D únicos da Matriz/Atlas. '+data.suspeitos+' SUSPEITO não contabilizados. '+data.repetidos_historico+
+    ' N/D já apareciam no histórico; lote entre '+data.intervalo_inicio+' e '+data.intervalo_fim+
+    ' atribuído à data final, não a cada dia individual.';
+  wmsBotImportCandidate=data;
+  box.textContent='Conferência '+reference+': '+pt(data.baixados_historico)+' baixas anteriores + '+
+   pt(data.novos_nd)+' N/D = '+pt(data.baixados_total)+' em sete dias. Média do bot: '+
+   decimal(data.baixados_total/7)+'/dia. Matriz: '+pt(data.matriz_rows)+' seriais. '+
+   (data.repetidos_historico?'Atenção: '+data.repetidos_historico+' serial(is) já constavam nas baixas. ':'')+
+   'O período de '+data.intervalo_inicio+' a '+data.intervalo_fim+' é atribuído pelo bot à data final. Confira e registre para aparecer no painel.';
+  button.disabled=!authSession?.access_token;
+ }catch(e){
+  if(sel!==wmsBatchSelection)return;
+  box.textContent='Não foi possível reproduzir a média: '+String(e.message||e);
+  button.disabled=true;
+ }
+}
+async function wmsBotSaveCandidate(silent=false){
+ const x=wmsBotImportCandidate;
+ if(!x||!authSession?.access_token)throw Error('Cálculo do bot ainda não conferido.');
+ if(!silent&&!window.confirm('Registrar a média reconstruída do bot de '+x.referencia+'? São '+x.baixados_total+
+  ' baixas em 7 dias ('+decimal(x.baixados_total/7)+'/dia). Não altera estoque nem carga.'))return;
+ const rows=await apiGet('wms_bot_media_7dias','referencia,baixados_total,arquivos',{referencia:'eq.'+x.referencia});
+ if(rows.length){
+  if(Number(rows[0].baixados_total)===x.baixados_total&&JSON.stringify(rows[0].arquivos?.hashes)===JSON.stringify(x.arquivos?.hashes))
+   return {ja_importado:true};
+  throw Error('Já existe uma apuração nessa data com outros arquivos ou totais. Revisão necessária; não sobrescrevi o histórico.');
+ }
+ await ensureAccess();
+ const payload={referencia:x.referencia,periodo_inicio:x.periodo_inicio,periodo_fim:x.periodo_fim,
+  baixados_historico:x.baixados_historico,novos_nd:x.novos_nd,baixados_total:x.baixados_total,
+  por_tipo:x.por_tipo,saldo_matriz:x.saldo_matriz,tipo_saps:x.tipo_saps,
+  arquivos:x.arquivos,observacao:x.observacao,qualidade:'reconstrucao'};
+ const send=()=>fetch(config.url+'/rest/v1/wms_bot_media_7dias',{
+  method:'POST',headers:{apikey:config.key,Authorization:'Bearer '+config.token,'Content-Type':'application/json'},
+  body:JSON.stringify(payload)
+ });
+ let resp=await send();
+ if(resp.status===401&&authSession?.refresh_token){await renewSession();resp=await send()}
+ if(!resp.ok){const err=await resp.json().catch(()=>({}));throw Error(err.message||'Erro HTTP '+resp.status)}
+ await wmsD1Load();return {salvo:true};
+}
+$('wmsBotImportSave').addEventListener('click',async()=>{
+ const b=$('wmsBotImportSave');b.disabled=true;
+ try{const result=await wmsBotSaveCandidate();
+  if(result)$('wmsBotImportStatus').textContent=(result.ja_importado?'Cálculo já registrado.':'Média registrada no HOPE.')+
+   ' Referência '+wmsBotImportCandidate.referencia+': '+decimal(wmsBotImportCandidate.baixados_total/7)+'/dia.';
+ }catch(e){$('wmsBotImportStatus').textContent='Média não registrada: '+String(e.message||e)}
+ finally{b.disabled=!wmsBotImportCandidate||!authSession?.access_token;}
+});
+
 function wmsBatchRefresh(){
  const sel=wmsBatchSelection;
  const c=sel.conect.size,cv=c===6?conectValidacao():'Faltam '+(6-c)+' relatórios Conect';
@@ -2421,6 +2588,7 @@ function wmsBatchRefresh(){
  const latestConectDate=opsCurrentFromDB?opsReference:null;
  $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&date===dated&&latestConectDate===date&&!wmsBatchBusy&& !blockingWarning&&!incompleto);
  $('wmsBatchNneSave').disabled=!n||!!n.invalid||!authSession?.access_token||wmsBatchBusy;
+ $('wmsBotImportSave').disabled=!wmsBotImportCandidate||!authSession?.access_token||wmsBatchBusy;
  let main=ready?'Pronto: os dois relatórios podem ser registrados após sua confirmação.':c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
  if(incompleto)main='Este NAtlas tem somente ASSINANTES. Pode conferir o D-1, mas não pode gravá-lo como fotografia completa. Selecione o NAtlas com todas as localizações.';
  if(blockingWarning)main='Atualização bloqueada: há arquivo repetido, formato incompatível ou datas divergentes. Corrija a seleção antes de gravar.';
