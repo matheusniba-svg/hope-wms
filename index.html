@@ -432,7 +432,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="import-drop">
   <label for="wmsBatchFiles"><strong>1. Selecione todas as planilhas do dia de uma vez</strong></label>
   <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Escolher relatórios do dia" />
-  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx + MEDIA SERIAIS. O HOPE identifica cada arquivo pelo nome.</small>
+  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx + MEDIA SERIAIS. O HOPE identifica cada arquivo pelas colunas e pelos dados, independentemente do nome.</small>
  </div>
  <div class="wms-batch-grid">
   <div class="wms-batch-tile"><small>Conect — seis relatórios</small><strong id="wmsBatchConectStat">Aguardando</strong><span id="wmsBatchConectDetail">Sem arquivos</span></div>
@@ -440,7 +440,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <div class="wms-batch-tile"><small>Abastecimento NNE</small><strong id="wmsBatchNneStat">Opcional</strong><span id="wmsBatchNneDetail">Sem arquivo</span></div>
  </div>
  <div class="form-grid" style="margin-top:15px">
-   <div class="field"><span>2. Data da fotografia (automática)</span><output id="wmsBatchDatePreview" class="wms-date-auto" aria-live="polite">Selecione os arquivos</output><input id="wmsBatchDateInput" type="hidden" value=""><small>O HOPE usa a data dos arquivos Conect e NAtlas. Para importar outro dia, selecione os relatórios daquela data.</small></div>
+   <div class="field"><span>2. Data da fotografia (automática)</span><output id="wmsBatchDatePreview" class="wms-date-auto" aria-live="polite">Selecione os arquivos</output><input id="wmsBatchDateInput" type="date" aria-label="Data da fotografia a confirmar"><small>Confirme a data da fotografia: ela não pode ser deduzida com segurança apenas pelos dados ou pelo nome do arquivo.</small></div>
    <label class="field" style="justify-content:center"><span>Conferência de integridade</span><span class="wms-batch-check"><input id="wmsBatchComplete" type="checkbox" /> Confirmo que o NAtlas é completo e corresponde à data indicada.</span></label>
  </div>
  <div id="wmsBatchStatus" class="import-status" role="status" aria-live="polite" style="white-space:pre-line">Selecione os relatórios. Nenhum dado será alterado antes da confirmação.</div>
@@ -1339,10 +1339,12 @@ $('conectFiles').addEventListener('change',async e=>{
  if(!files.length){$('importStatus').textContent='Nenhuma planilha selecionada.';return;}
  $('importStatus').textContent=`Lendo ${files.length} planilha(s) neste navegador...`;
  await new Promise(r=>requestAnimationFrame(r));
- for(const file of files){const kind=idOfFile(file.name);if(!kind){importWarnings.push('Arquivo ignorado (nome não reconhecido): '+file.name);continue;}
-  if(importsPreview.has(kind)){importWarnings.push('Planilha repetida: '+file.name+' (será usada a primeira).');continue;}
-  if(!/\.xlsx$/i.test(file.name)){importWarnings.push('Formato não suportado nesta versão: '+file.name);continue;}
-  try{importsPreview.set(kind,await readConectXlsx(file));const d=dateFromFilename(file.name);if(d)$('conectReferencia').value=d;}
+ for(const file of files){
+  const identified=await wmsBatchClassify(file);
+  if(identified.group!=='conect'){importWarnings.push('Não é relatório Conect reconhecido: '+file.name+' — '+(identified.reason||'conteúdo de outra origem'));continue;}
+  const kind=identified.kind;
+  if(importsPreview.has(kind)){importWarnings.push('Dois arquivos com o mesmo conteúdo de '+previewKind(kind)+': '+file.name);continue;}
+  try{importsPreview.set(kind,await readConectXlsx(file));}
   catch(err){importWarnings.push(file.name+': '+String(err.message||err));}
  }
  $('importStatus').textContent=`${importsPreview.size} tipo(s) reconhecido(s) e lido(s). Conferência local concluída. O banco ainda não foi alterado.`;
@@ -2382,18 +2384,48 @@ function wmsBatchNneDate(filename){
  const y=new Date().getFullYear(),value=y+'-'+m[2]+'-'+m[1],d=new Date(value+'T12:00:00Z');
  return Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==value?null:value;
 }
-function wmsBatchClassify(file){
- const n=String(file.name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
- const ext=n.split('.').at(-1),conect=idOfFile(file.name);
- if(conect)return {group:'conect',kind:conect,ok:ext==='xlsx'};
- if(n.includes('inicializados matriz cgde'))return {group:'matriz',ok:ext==='xlsx'};
- if(n.includes('baixados assinantes'))return {group:'baixados_bot',ok:ext==='xlsx'};
- if(n.includes('media seriais consumo diario'))return {group:'media_bot',ok:ext==='xlsx'};
- if(n.includes('relatorio atlas')&&!n.includes('natlas_relatorio'))return {group:'atlas_bot',ok:ext==='xlsx'};
- if(n.includes('natlas_relatorio_posicao_equipamento'))return {group:'diario',ok:ext==='xlsx'};
- if(n.startsWith('nne_')||n.startsWith('nne-'))return {group:'nne',ok:ext==='xlsx'};
- if(n.includes('relatorio_equipamentos_analitico')||n.includes('relatorio equipamentos analitico'))return {group:'analitico',ok:['xls','html','htm'].includes(ext)};
- return {group:'desconhecido',ok:false};
+async function wmsBatchClassify(file){
+ const name=String(file.name||''),ext=name.toLowerCase().split('.').at(-1);
+ if(['xls','html','htm'].includes(ext)){
+  const sample=new TextDecoder('windows-1252').decode(await file.slice(0,12000).arrayBuffer());
+  const norm=wmsNorm(sample.replace(/<[^>]*>/g,' '));
+  if(/<table\b/i.test(sample)&&norm.includes('CODIGO FORNECEDOR SAP')&&norm.includes('NUMERO SERIE'))
+   return {group:'analitico',ok:true};
+  return {group:'desconhecido',ok:false,reason:'Arquivo sem estrutura conhecida do Atlas analítico'};
+ }
+ if(ext!=='xlsx')return {group:'desconhecido',ok:false,reason:'Formato não suportado (use XLSX ou XLS HTML)'};
+ try{
+  const workbook=zipCatalog(await file.arrayBuffer());
+  const xml=await workbook.read('xl/workbook.xml');
+  const sheetNames=xml?elements(xmlDoc(xml),'sheet').map(x=>wmsNorm(x.getAttribute('name'))):[];
+  if(sheetNames.includes('DIARIO')&&sheetNames.includes('SALDO ATLAS'))return {group:'media_bot',ok:true};
+  if(sheetNames.includes('GERAL')&&sheetNames.includes('BAIXADOS ASSINANTES'))
+   return {group:'matriz',ok:true};
+  const rows=await wmsSheetRows(file);
+  if(rows.length<2)return {group:'desconhecido',ok:false,reason:'Sem linhas de dados'};
+  const h=rows[0].row.map(wmsNorm),has=(...cols)=>cols.every(x=>h.includes(wmsNorm(x)));
+  if(has('SERIAL','BASE','SAP','STATUS')){
+   const statusIndex=h.indexOf('STATUS');
+   const statuses=new Set(rows.slice(1).map(r=>wmsNorm(r.row[statusIndex]||'')).filter(Boolean));
+   const byStatus={'NO ESTOQUE':'no_estoque','COM TECNICO':'com_tecnico','CONFIRMACAO DO TECNICO':'confirmacao',
+    'RETIRADO':'retirado','AGUARDANDO REVERSA':'reversa','ENTREGUE ESTOQUE':'reversa','DEFEITO KIT':'reversa'};
+   if(statuses.size&&[...statuses].every(x=>byStatus[x])){
+    const families=new Set([...statuses].map(x=>byStatus[x]));
+    if(families.size===1)return {group:'conect',kind:[...families][0],ok:true};
+    if([...families].every(x=>['no_estoque','com_tecnico','confirmacao'].includes(x))&&families.size===3)
+      return {group:'conect',kind:'total',ok:true};
+   }
+   return {group:'desconhecido',ok:false,reason:'Estados misturados ou não reconhecidos no Conect: '+[...statuses].slice(0,6).join(', ')};
+  }
+  if(has('SERIE / ENDER. PRINC.','MATERIAL SAP','LOCAL','TIPO LOCAL','DATA DA ALTERACAO'))
+   return {group:'diario',ok:true};
+  if(has('COD_FORN_SAP','TIPO_MATERIAL','STATUS_NF','MATERIAL','QUANTIDADE','NF_CORRIGIDA'))
+   return {group:'nne',ok:true};
+  if(has('ENDERECAVEL PRINCIPAL','ESTADO','OPERACAO'))return {group:'atlas_bot',ok:true};
+  if(has('TIPO','SERIAL','DATA'))return {group:'baixados_bot',ok:true};
+  if(has('TIPO','SERIAL','SAP'))return {group:'matriz',ok:true};
+  return {group:'desconhecido',ok:false,reason:'Não encontrei colunas suficientes para identificar a origem'};
+ }catch(err){return {group:'desconhecido',ok:false,reason:String(err.message||err)}}
 }
 function wmsBatchAssign(id,files){
  const t=new DataTransfer();files.forEach(f=>t.items.add(f));
@@ -2587,8 +2619,7 @@ function wmsBatchRefresh(){
  $('wmsBatchNneDetail').textContent=n?pt(n.stats.units)+' terminais ETER em trânsito':sel.nne?$('wmsNneMsg').textContent.slice(0,130):'Abastecimento independente';
  const date=$('wmsBatchDateInput').value;
  $('wmsBatchDatePreview').textContent=/^\d{4}-\d{2}-\d{2}$/.test(date)?date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Aguardando arquivos com a mesma data';
- const dated=sel.diario?wmsBatchDate(sel.diario.name):null;
- const unmatched=dated&&date&&dated!==date;
+ const unmatched=false; // A data é confirmada pelo administrador, não inferida do nome.
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
  const blockingWarning=sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w));
  const incompleto=wmsNatlasSomenteAssinantes();
@@ -2597,33 +2628,31 @@ function wmsBatchRefresh(){
  $('wmsBatchSubmit').disabled=!ready;
  // Permite concluir NAtlas quando o Conect dessa mesma data já foi gravado.
  const latestConectDate=opsCurrentFromDB?opsReference:null;
- $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&date===dated&&latestConectDate===date&&!wmsBatchBusy&& !blockingWarning&&!incompleto);
+ $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&latestConectDate===date&&!wmsBatchBusy&& !blockingWarning&&!incompleto);
  $('wmsBatchNneSave').disabled=!n||!!n.invalid||!authSession?.access_token||wmsBatchBusy;
  $('wmsBotImportSave').disabled=!wmsBotImportCandidate||!authSession?.access_token||wmsBatchBusy;
  let main=ready?(sel.diario?'Pronto: Conect e NAtlas podem ser registrados após confirmação.':'Pronto: os seis KPI do Conect podem ser atualizados sem NAtlas.'):c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
  if(incompleto)main='Este NAtlas tem somente ASSINANTES. Pode conferir o D-1, mas não pode gravá-lo como fotografia completa. Selecione o NAtlas com todas as localizações.';
  if(blockingWarning)main='Atualização bloqueada: há arquivo repetido, formato incompatível ou datas divergentes. Corrija a seleção antes de gravar.';
- if(unmatched)main='A data informada não corresponde ao nome do NAtlas ('+dated+'). Corrija antes de continuar.';
+ 
  $('wmsBatchStatus').textContent=main+(sel.matriz?'\nMatriz histórica reconhecida, sem sobrescrever estoque.':'')+(issue?'\n'+issue:'');
 }
-$('wmsBatchFiles').addEventListener('change',e=>{
+$('wmsBatchFiles').addEventListener('change',async e=>{
  if(wmsBatchBusy)return;
  const files=Array.from(e.target.files||[]),sel={conect:new Map(),diario:null,nne:null,matriz:null,analitico:null,atlas_bot:null,baixados_bot:null,media_bot:null,warnings:[]};
  for(const file of files){
-  const t=wmsBatchClassify(file);
-  if(t.group==='desconhecido'){sel.warnings.push('Arquivo não reconhecido: '+file.name);continue}
+  const t=await wmsBatchClassify(file);
+  if(t.group==='desconhecido'){sel.warnings.push('Não classificado: '+file.name+' — '+(t.reason||'formato não compatível com as fontes cadastradas'));continue}
   if(!t.ok){sel.warnings.push('Formato incompatível: '+file.name+'; exporte para XLSX quando for NAtlas ou Conect.');continue}
   if(t.group==='conect'){if(sel.conect.has(t.kind))sel.warnings.push('Conect duplicado: '+file.name);else sel.conect.set(t.kind,file)}
   else if(sel[t.group])sel.warnings.push('Arquivo do mesmo tipo repetido: '+file.name);
   else sel[t.group]=file;
  }
  wmsBatchSelection=sel;$('wmsBatchComplete').checked=false;$('wmsBatchProgress').textContent='As planilhas estão sendo verificadas localmente; nenhuma alteração no banco.';
- const days=[...sel.conect.values(),...(sel.diario?[sel.diario]:[])].map(f=>wmsBatchDate(f.name)).filter(Boolean);
- const unique=[...new Set(days)];
- if(unique.length>1)sel.warnings.push('Conect e NAtlas apresentam datas diferentes: '+unique.join(', '));
- $('wmsBatchDateInput').value=unique.length===1?unique[0]:'';
- const nneDate=sel.nne?wmsBatchNneDate(sel.nne.name):null;
- if(nneDate)$('wmsNneDate').value=nneDate;
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Campo_Grande',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const date=$('wmsBatchDateInput');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date.value))date.value=today;
+ $('wmsNneDate').value=date.value;
  if(sel.conect.size){wmsBatchAssign('conectFiles',[...sel.conect.values()]);}
  else{importsPreview=new Map();importWarnings=[];$('conectFiles').value='';renderConectPreview();}
  if(sel.diario)wmsBatchAssign('dailyFile',[sel.diario]);
@@ -2632,15 +2661,15 @@ $('wmsBatchFiles').addEventListener('change',e=>{
  else{wmsFontes.nne=null;$('wmsNneFile').value='';wmsRenderNne();}
  if(sel.analitico)wmsBatchAssign('wmsAnaliticoFile',[sel.analitico]);
  else{wmsFontes.analitico=null;$('wmsAnaliticoFile').value='';wmsRenderAnalitico();}
- if(unique.length===1){$('conectReferencia').value=unique[0];$('dailyDate').value=unique[0];}
+ $('conectReferencia').value=date.value;$('dailyDate').value=date.value;
  if(sel.matriz&&!sel.atlas_bot)sel.warnings.push('Matriz reconhecida; selecione também Relatorio atlas e BAIXADOS para calcular a média pela regra do bot.');
  if(sel.analitico)sel.warnings.push('Atlas Analítico disponível na área avançada; não gera consumo.');
- if(sel.nne&&nneDate&&unique.length===1&&nneDate!==unique[0])sel.warnings.push('NNE tem data '+nneDate+' e será gravado apenas por confirmação independente.');
+ if(sel.nne)sel.warnings.push('Confira a data do NNE separadamente antes de gravá-lo.');
  wmsBatchRefresh();
  void wmsBotPreviewFiles();
 });
 $('wmsBatchComplete').addEventListener('change',()=>{$('dailyComplete').checked=$('wmsBatchComplete').checked;dailyReady();wmsBatchRefresh()});
-$('wmsBatchDateInput').addEventListener('change',()=>{const d=$('wmsBatchDateInput').value;$('conectReferencia').value=d;$('dailyDate').value=d;wmsBatchRefresh()});
+$('wmsBatchDateInput').addEventListener('change',()=>{const d=$('wmsBatchDateInput').value;$('conectReferencia').value=d;$('dailyDate').value=d;$('wmsNneDate').value=d;wmsBatchRefresh();void wmsBotPreviewFiles()});
 $('wmsBatchAdvanced').addEventListener('click',()=>{
  const next=document.body.classList.toggle('wms-wizard-compact');
  const open=!next;$('wmsBatchAdvanced').textContent=open?'Ocultar detalhes avançados':'Mostrar detalhes avançados';
@@ -2651,7 +2680,7 @@ for(const id of ['importStatus','dailyPreview','wmsNnePreview','conectCommitMess
 }
 $('wmsBatchOnlyNatlas').addEventListener('click',async()=>{
  const date=$('wmsBatchDateInput').value,sel=wmsBatchSelection;
- if(wmsBatchBusy||!dailyCandidate||wmsNatlasSomenteAssinantes()||!sel.diario||!authSession?.access_token||!$('wmsBatchComplete').checked||!opsCurrentFromDB||opsReference!==date||wmsBatchDate(sel.diario.name)!==date)return;
+ if(wmsBatchBusy||!dailyCandidate||wmsNatlasSomenteAssinantes()||!sel.diario||!authSession?.access_token||!$('wmsBatchComplete').checked||!opsCurrentFromDB||opsReference!==date)return;
  if(sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w)))return;
  if(!window.confirm('Importar SOMENTE NAtlas '+date+'? O Conect dessa data já foi registrado. Serão cruzados os seriais e as datas da coluna P, sem reenviar a posição Conect.'))return;
  wmsBatchBusy=true;$('wmsBatchOnlyNatlas').disabled=true;
