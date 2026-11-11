@@ -1452,6 +1452,8 @@ function setOperationalPositions(entries,source,reference,persisted){
  if(technicianList.length)renderTechnicians();
 }
 function renderOpsFromPreview(){
+ // Manter a posição confirmada visível durante a conferência de novos arquivos.
+ if(opsCurrentFromDB)return;
  const groups=['no_estoque','com_tecnico','confirmacao'];
  if(groups.every(k=>importsPreview.has(k))){
   const r=groups.flatMap(k=>importsPreview.get(k).records.map(x=>({...x,tipo:k})));
@@ -2621,7 +2623,7 @@ function wmsBatchRefresh(){
  $('wmsBatchDatePreview').textContent=/^\d{4}-\d{2}-\d{2}$/.test(date)?date.slice(8,10)+'/'+date.slice(5,7)+'/'+date.slice(0,4):'Aguardando arquivos com a mesma data';
  const unmatched=false; // A data é confirmada pelo administrador, não inferida do nome.
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
- const blockingWarning=sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w));
+ const blockingWarning=sel.warnings.some(w=>/Conect duplicado|NAtlas duplicado|datas diferentes.*Conect|formato incompatível.*Conect/i.test(w));
  const incompleto=wmsNatlasSomenteAssinantes();
  const ready=c===6&&cv===''&&(!sel.diario||!!d&&!incompleto&&!!$('wmsBatchComplete').checked)&&!!authSession?.access_token&&!!date&&!unmatched&&!blockingWarning&&!wmsBatchBusy;
  $('wmsBatchSubmit').textContent=sel.diario?'3. Confirmar atualização Conect + NAtlas':'3. Atualizar somente Conect';
@@ -2681,7 +2683,7 @@ for(const id of ['importStatus','dailyPreview','wmsNnePreview','conectCommitMess
 $('wmsBatchOnlyNatlas').addEventListener('click',async()=>{
  const date=$('wmsBatchDateInput').value,sel=wmsBatchSelection;
  if(wmsBatchBusy||!dailyCandidate||wmsNatlasSomenteAssinantes()||!sel.diario||!authSession?.access_token||!$('wmsBatchComplete').checked||!opsCurrentFromDB||opsReference!==date)return;
- if(sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w)))return;
+ if(sel.warnings.some(w=>/Conect duplicado|NAtlas duplicado|datas diferentes.*Conect|formato incompatível.*Conect/i.test(w)))return;
  if(!window.confirm('Importar SOMENTE NAtlas '+date+'? O Conect dessa data já foi registrado. Serão cruzados os seriais e as datas da coluna P, sem reenviar a posição Conect.'))return;
  wmsBatchBusy=true;$('wmsBatchOnlyNatlas').disabled=true;
  $('dailyDate').value=date;$('dailyComplete').checked=true;
@@ -2702,7 +2704,7 @@ $('wmsBatchSubmit').addEventListener('click',async()=>{
  const sel=wmsBatchSelection,date=$('wmsBatchDateInput').value;
  if(wmsBatchBusy||sel.conect.size!==6||conectValidacao()||!authSession?.access_token)return;
  if(!sel.diario){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w)))return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||sel.warnings.some(w=>/Conect duplicado|NAtlas duplicado|datas diferentes.*Conect|formato incompatível.*Conect/i.test(w)))return;
   if(!window.confirm('Atualizar SOMENTE o Conect de '+date+' com os seis KPIs? O NAtlas e as instalações não serão alterados.'))return;
   wmsBatchBusy=true;$('wmsBatchSubmit').disabled=true;
   try{$('conectReferencia').value=date;const c=await wmsCommitConect(true);
@@ -2714,7 +2716,7 @@ $('wmsBatchSubmit').addEventListener('click',async()=>{
  }
  if(!dailyCandidate||wmsNatlasSomenteAssinantes()||!$('wmsBatchComplete').checked)return;
  if(wmsBatchDate(sel.diario.name)!==date){$('wmsBatchProgress').textContent='Corrija a data do NAtlas antes de gravar.';return}
- if(sel.warnings.some(w=>/datas diferentes|duplicado|repetido|incompatível/i.test(w))){$('wmsBatchProgress').textContent='Há um problema na seleção. Corrija antes de gravar.';return}
+ if(sel.warnings.some(w=>/Conect duplicado|NAtlas duplicado|datas diferentes.*Conect|formato incompatível.*Conect/i.test(w))){$('wmsBatchProgress').textContent='Há um problema na seleção. Corrija antes de gravar.';return}
  if(!window.confirm('Confirmar atualização do HOPE em '+date+'?\n\nConect: 6 relatórios conferidos.\nNAtlas: '+dailyCandidate.linhas.length+' seriais; data de instalação da coluna P.\n\nO sistema registrará primeiro o Conect e depois o NAtlas. A Matriz histórica e o NNE não serão alterados.'))return;
  wmsBatchBusy=true;$('wmsBatchSubmit').disabled=true;$('wmsBatchNneSave').disabled=true;
  let conectDone=false;
