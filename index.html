@@ -432,7 +432,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="import-drop">
   <label for="wmsBatchFiles"><strong>1. Selecione todas as planilhas do dia de uma vez</strong></label>
   <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Escolher relatórios do dia" />
-  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx + MEDIA SERIAIS. O HOPE identifica cada arquivo pelas colunas e pelos dados, independentemente do nome.</small>
+  <small class="import-muted">Selecione Total Disponíveis do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx + MEDIA SERIAIS. O HOPE identifica cada arquivo pelas colunas e pelos dados, independentemente do nome.</small>
  </div>
  <div class="wms-batch-grid">
   <div class="wms-batch-tile"><small>Conect — seis relatórios</small><strong id="wmsBatchConectStat">Aguardando</strong><span id="wmsBatchConectDetail">Sem arquivos</span></div>
@@ -462,7 +462,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="section-top"><div><h2 id="importTitle">Atualização do Conect — conferência e envio</h2><small>Conferência obrigatória antes do envio, com histórico de alterações no Supabase.</small></div><span class="status-chip warning">Somente administrador</span></div>
  <div class="import-drop"><label for="conectFiles"><strong>Selecionar relatórios de Campo Grande (.xlsx)</strong></label>
    <input id="conectFiles" type="file" accept=".xlsx" multiple aria-label="Selecionar planilhas do Conect" />
-   <small class="import-muted">Selecione os seis arquivos: No Estoque, Com Técnico, Confirmação Técnico, Total Disponíveis, Aguardando Reversa e Retirado. O navegador reconhece pelo campo Status e filtra automaticamente apenas CAMPO GRANDE; somente após sua confirmação enviará os dados dos três relatórios ativos ao Supabase. Reversa e Retirado são usados nesta etapa apenas para conferência, sem alterar saldos.</small>
+   <small class="import-muted">Selecione os seis arquivos: No Estoque, Com Técnico, Confirmação Técnico, Total Disponíveis, Aguardando Reversa e Retirado. O navegador identifica pelo campo Status e filtra CAMPO GRANDE. Total Disponíveis basta para as três posições ativas; outros relatórios são opcionais para conferência. Reversa e Retirado são usados nesta etapa apenas para conferência, sem alterar saldos.</small>
  </div>
  <div id="importStatus" class="import-status" role="status">Nenhuma planilha selecionada. Os dados de 06/11 permanecem no banco.</div>
  <div id="importResults" class="import-details hidden">
@@ -1299,7 +1299,7 @@ function renderConectComparison(){
  if(!parts.length)panel.textContent='Carregue os relatórios Com Técnico ou Total Disponíveis para comparar.';
 }
 function renderConectPreview(){
- const get=k=>importsPreview.get(k),n=k=>get(k)?.unique??null,required=['no_estoque','com_tecnico','confirmacao','total','reversa','retirado'];
+ const get=k=>importsPreview.get(k),n=k=>get(k)?.unique??wmsConectAtivos()?.get(k)?.unique??null,required=['total'];
  const show=(id,k)=>{$(id).textContent=n(k)===null?'—':pt(n(k))};
  show('previewStock','no_estoque');show('previewTech','com_tecnico');show('previewPending','confirmacao');show('previewTotal','total');
  $('importResults').classList.toggle('hidden',importsPreview.size===0);
@@ -1352,20 +1352,32 @@ $('conectFiles').addEventListener('change',async e=>{
 });
 
 // V7: aplicação atômica no backend, autorizada somente ao usuário admin por RLS + função.
-function conectValidacao(){
- const wanted=['no_estoque','com_tecnico','confirmacao','total','reversa','retirado'];
- if(wanted.some(k=>!importsPreview.has(k)))return 'Selecione os seis relatórios do Conect.';
- if(importWarnings.length)return 'Existem arquivos não reconhecidos, repetidos ou com erro de leitura.';
- for(const [k,v] of importsPreview){
-  // Registros de outras filiais já foram excluídos durante a leitura; não bloquear Campo Grande.
-  // Reversa/Retirado são ocorrências auxiliares: duplicidades ou linhas sem serial não alteram o saldo ativo.
-  if(!['reversa','retirado'].includes(k)&&(v.duplicates||v.withoutSerial))return `${previewKind(k)} tem registros inválidos ou duplicados.`;
+function wmsConectAtivos(){
+ const total=importsPreview.get('total'),types=['no_estoque','com_tecnico','confirmacao'];
+ if(!total)return null;
+ const names={'NO ESTOQUE':'no_estoque','COM TECNICO':'com_tecnico','CONFIRMACAO DO TECNICO':'confirmacao','AGUARDANDO CONFIRMACAO':'confirmacao'};
+ const by=Object.fromEntries(types.map(k=>[k,[]]));
+ for(const r of total.records){const k=names[wmsNorm(r.status)];if(!k)return null;by[k].push(r);}
+ const result=new Map();
+ for(const k of types){
+  const file=importsPreview.get(k),records=by[k],serials=new Set(records.map(r=>r.serial));
+  if(serials.size!==records.length)return null;
+  if(file&&(file.serials.size!==serials.size||countIntersection(file.serials,serials)!==serials.size))return null;
+  result.set(k,{records,serials,unique:serials.size});
  }
- const components=wanted.slice(0,3).map(k=>importsPreview.get(k));
- const sets=components.map(x=>x.serials),total=importsPreview.get('total').serials;
- if(countIntersection(sets[0],sets[1])||countIntersection(sets[0],sets[2])||countIntersection(sets[1],sets[2]))return 'Um serial está presente em mais de um relatório ativo.';
- const union=setUnion(...sets);if(union.size!==total.size||countIntersection(union,total)!==total.size)return 'Total Disponíveis não corresponde aos três componentes.';
- if(union.size!==components.reduce((n,x)=>n+x.unique,0))return 'As quantidades não fecharam.';
+ return result;
+}
+function conectValidacao(){
+ const grouped=wmsConectAtivos();
+ if(!grouped)return 'Total Disponíveis não identificado ou divergente dos relatórios específicos.';
+ if(importWarnings.some(w=>/mesmo conteúdo|planilha repetida|erro de leitura/i.test(w)))return 'Arquivo Conect duplicado ou com erro de leitura.';
+ for(const k of ['total','no_estoque','com_tecnico','confirmacao']){
+  const x=importsPreview.get(k);
+  if(x&&(x.duplicates||x.withoutSerial))return previewKind(k)+' possui serial inválido ou duplicado.';
+ }
+ const sets=[...grouped.values()].map(x=>x.serials);
+ if(countIntersection(sets[0],sets[1])||countIntersection(sets[0],sets[2])||countIntersection(sets[1],sets[2]))
+   return 'Serial em mais de um estado ativo no Total Disponíveis.';
  return '';
 }
 function updateSaveConect(){
@@ -1413,14 +1425,15 @@ async function wmsCommitConect(alreadyConfirmed=false){
  const data=$('conectReferencia').value;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(data)){$('conectCommitMessage').textContent='Selecione a data dos relatórios.';return}
  const parts=['no_estoque','com_tecnico','confirmacao'];
- const originais=parts.flatMap(k=>importsPreview.get(k).records.map(r=>({serial:r.serial,tipo:k,sap:r.sap,login:r.login,tecnico:r.tecnico,base:r.base})));
+ const byStatus=wmsConectAtivos();
+ const originais=parts.flatMap(k=>byStatus.get(k).records.map(r=>({serial:r.serial,tipo:k,sap:r.sap,login:r.login,tecnico:r.tecnico,base:r.base})));
  const quarantined=originais.filter(r=>wmsBadSerial(r.serial));
  const itens=originais.filter(r=>!wmsBadSerial(r.serial));
  const validCount=k=>itens.filter(x=>x.tipo===k).length;
  const resumo={no_estoque:validCount('no_estoque'),com_tecnico:validCount('com_tecnico'),confirmacao:validCount('confirmacao'),total:itens.length,
   total_arquivo:importsPreview.get('total').unique,quarentena:quarantined.length,
   seriais_quarentena:quarantined.map(r=>({serial:r.serial,origem:r.tipo,sap:r.sap})),
-  reversa:importsPreview.get('reversa').unique,retirado:importsPreview.get('retirado').unique};
+  reversa:importsPreview.get('reversa')?.unique||0,retirado:importsPreview.get('retirado')?.unique||0};
  const notice=`Confirmar atualização do Conect de ${data}?\n\nEstoque: ${resumo.no_estoque}\nCom técnico: ${resumo.com_tecnico}\nConfirmação: ${resumo.confirmacao}\nTOTAL: ${resumo.total}\n\n${quarantined.length?`ATENÇÃO: ${quarantined.length} seriais em notação científica serão EXCLUÍDOS e registrados como pendências. Reexportar do Conect para obter os valores íntegros.\n\n`:``}A Matriz histórica e as instalações NÃO serão alteradas.`;
  if(!alreadyConfirmed&&!window.confirm(notice))return {resultado:'cancelado'};
  const btn=$('saveConect');btn.disabled=true;$('conectCommitMessage').textContent=`Enviando ${pt(itens.length)} seriais para o Supabase. Aguarde a resposta antes de tentar novamente.`;
@@ -2608,9 +2621,9 @@ $('wmsBotImportSave').addEventListener('click',async()=>{
 
 function wmsBatchRefresh(){
  const sel=wmsBatchSelection;
- const c=sel.conect.size,cv=c===6?conectValidacao():'Faltam '+(6-c)+' relatórios Conect';
- $('wmsBatchConectStat').textContent=c+'/6 arquivos';
- $('wmsBatchConectDetail').textContent=c===6&&cv===''?pt(['no_estoque','com_tecnico','confirmacao'].reduce((n,k)=>n+(importsPreview.get(k)?.unique||0),0))+' seriais conferidos':c===6?(cv||'Conferindo os arquivos...'):'Aguardando os 6 KPI do Conect';
+ const c=sel.conect.size,cv=importsPreview.has('total')?conectValidacao():'Aguardando Total Disponíveis';
+ $('wmsBatchConectStat').textContent=c+' arquivo(s) · Total obrigatório';
+ $('wmsBatchConectDetail').textContent=cv||pt(importsPreview.get('total')?.unique||0)+' seriais únicos conferidos';
  const d=dailyCandidate;
  const dailyMsg=$('dailyPreview').textContent||'';
  const dailyFail=!!sel.diario&&!d&&dailyMsg!=='Conferindo o relatório...'&&dailyMsg!=='Selecione o relatório para conferir, antes de gravar.';
@@ -2625,7 +2638,7 @@ function wmsBatchRefresh(){
  const issue=sel.warnings.length?'Atenção:\n• '+sel.warnings.join('\n• '):'';
  const blockingWarning=sel.warnings.some(w=>/Conect duplicado|NAtlas duplicado|datas diferentes.*Conect|formato incompatível.*Conect/i.test(w));
  const incompleto=wmsNatlasSomenteAssinantes();
- const ready=c===6&&cv===''&&(!sel.diario||!!d&&!incompleto&&!!$('wmsBatchComplete').checked)&&!!authSession?.access_token&&!!date&&!unmatched&&!blockingWarning&&!wmsBatchBusy;
+ const ready=importsPreview.has('total')&&cv===''&&(!sel.diario||!!d&&!incompleto&&!!$('wmsBatchComplete').checked)&&!!authSession?.access_token&&!!date&&!unmatched&&!blockingWarning&&!wmsBatchBusy;
  $('wmsBatchSubmit').textContent=sel.diario?'3. Confirmar atualização Conect + NAtlas':'3. Atualizar somente Conect';
  $('wmsBatchSubmit').disabled=!ready;
  // Permite concluir NAtlas quando o Conect dessa mesma data já foi gravado.
@@ -2633,7 +2646,7 @@ function wmsBatchRefresh(){
  $('wmsBatchOnlyNatlas').disabled=!(sel.diario&&d&&authSession?.access_token&&$('wmsBatchComplete').checked&&date&&latestConectDate===date&&!wmsBatchBusy&& !blockingWarning&&!incompleto);
  $('wmsBatchNneSave').disabled=!n||!!n.invalid||!authSession?.access_token||wmsBatchBusy;
  $('wmsBotImportSave').disabled=!wmsBotImportCandidate||!authSession?.access_token||wmsBatchBusy;
- let main=ready?(sel.diario?'Pronto: Conect e NAtlas podem ser registrados após confirmação.':'Pronto: os seis KPI do Conect podem ser atualizados sem NAtlas.'):c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
+ let main=ready?(sel.diario?'Pronto: Conect e NAtlas podem ser registrados após confirmação.':'Pronto: posição ativa do Connect conferida pelo Total Disponíveis.'):c===6&&cv===''&&d?'Confira a data e marque a confirmação do relatório NAtlas completo.':'Selecione os relatórios e confira os cartões. Nenhuma informação foi gravada.';
  if(incompleto)main='Este NAtlas tem somente ASSINANTES. Pode conferir o D-1, mas não pode gravá-lo como fotografia completa. Selecione o NAtlas com todas as localizações.';
  if(blockingWarning)main='Atualização bloqueada: há arquivo repetido, formato incompatível ou datas divergentes. Corrija a seleção antes de gravar.';
  
