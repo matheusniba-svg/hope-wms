@@ -2674,7 +2674,16 @@ $('wmsBatchSubmit').addEventListener('click',async()=>{
   conectDone=true;
   $('wmsBatchProgress').textContent='Conect registrado (lote '+c.lote_id+'). Etapa 2/2: verificando instalações NAtlas...';
   const d=await wmsCommitDaily();
-  $('wmsBatchProgress').textContent='Atualização concluída. Conect: '+c.resultado+'; NAtlas: '+(d.resultado==='ja_importado'?'já importado':pt(d.novas)+' novos seriais, '+pt(d.vinculadas)+' atribuídos à carga recente')+'. Datas de instalação registradas pela coluna P.';
+  let botMessage='';
+  if(wmsBotImportCandidate?.referencia===date){
+   try{
+    const result=await wmsBotSaveCandidate(true);
+    botMessage=' Média do bot: '+decimal(wmsBotImportCandidate.baixados_total/7)+'/dia'+(result?.ja_importado?' (já registrada).':' (registrada).');
+   }catch(error){
+    botMessage=' Média do bot NÃO registrada: '+String(error.message||error)+'. Confira a seção de cálculo acima.';
+   }
+  }
+  $('wmsBatchProgress').textContent='Atualização concluída. Conect: '+c.resultado+'; NAtlas: '+(d.resultado==='ja_importado'?'já importado':pt(d.novas)+' novos seriais, '+pt(d.vinculadas)+' atribuídos à carga recente')+'. Datas de instalação registradas pela coluna P.'+botMessage;
   await loadConectCurrent();
  }catch(error){
   $('wmsBatchProgress').textContent=(conectDone?'Conect foi atualizado, mas o NAtlas não foi concluído. ':'Nenhuma confirmação completa foi registrada. ')+'Motivo: '+String(error.message||error)+'. Confira os detalhes avançados para corrigir, sem reenviar indiscriminadamente.';
