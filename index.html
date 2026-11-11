@@ -260,6 +260,12 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
 .wms-bot-mean-number{display:flex;align-items:baseline;gap:6px}
 .wms-bot-mean-number strong{font-size:25px}
 .wms-bot-mean-number span{font-size:11px;color:#c4dae4}
+.wms-bot-import{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+ padding:13px;border-radius:11px;border:1px solid #36596c;background:#0e2535;margin:12px 0}
+.wms-bot-import>div{flex:1;min-width:230px}
+.wms-bot-import strong{font-size:13px}
+.wms-bot-import p{font-size:11px;line-height:1.55;color:#bad2df;margin:6px 0 0}
+.wms-bot-import button{white-space:nowrap}
 /* Estoque operacional inspirado na planilha, com detalhes apenas sob demanda */
 #operationalPanel .wms-simple-stock{max-width:1080px;width:100%}
 #operationalPanel .wms-simple-stock table{table-layout:fixed;min-width:760px}
@@ -426,7 +432,7 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
  <div class="import-drop">
   <label for="wmsBatchFiles"><strong>1. Selecione todas as planilhas do dia de uma vez</strong></label>
   <input id="wmsBatchFiles" type="file" accept=".xlsx,.xls,.html" multiple aria-label="Escolher relatórios do dia" />
-  <small class="import-muted">Selecione os 6 KPI do Conect e o NAtlas. Você também pode incluir NNE e INICIALIZADOS MATRIZ CGDE. O HOPE identifica cada arquivo pelo nome e confere tudo sem gravar.</small>
+  <small class="import-muted">Selecione os 6 KPI do Conect, NAtlas e, para calcular como o bot Atlas, INICIALIZADOS MATRIZ CGDE + BAIXADOS ASSINANTES + Relatorio atlas.xlsx. O HOPE identifica cada arquivo pelo nome.</small>
  </div>
  <div class="wms-batch-grid">
   <div class="wms-batch-tile"><small>Conect — seis relatórios</small><strong id="wmsBatchConectStat">Aguardando</strong><span id="wmsBatchConectDetail">Sem arquivos</span></div>
@@ -443,6 +449,10 @@ body.wms-locked .wms-layout{grid-template-columns:1fr}body.wms-locked .wms-works
   <button class="btn-ghost" id="wmsBatchOnlyNatlas" type="button" disabled>Atualizar somente NAtlas</button>
   <button class="btn-ghost" id="wmsBatchNneSave" type="button" disabled>Salvar NNE (opcional)</button>
   <button class="btn-ghost" id="wmsBatchAdvanced" type="button" aria-expanded="false">Mostrar detalhes avançados</button>
+ </div>
+ <div class="wms-bot-import">
+ <div><strong>Média do bot Atlas · 7 dias</strong><p id="wmsBotImportStatus" role="status" aria-live="polite">Inclua Matriz, BAIXADOS ASSINANTES e Relatorio atlas.xlsx na seleção acima. A conferência será feita por serial e data, sem alterar o estoque.</p></div>
+ <button class="btn-ghost" id="wmsBotImportSave" type="button" disabled>Registrar média conferida</button>
  </div>
  <p id="wmsBatchProgress" class="helper" role="status" aria-live="polite">O botão principal fará o Conect primeiro e depois o NAtlas. Consumo por técnico usa a coluna P e mantém a atribuição por serial.</p>
  <p class="section-note">A Matriz histórica não é substituída. Reversa e Retirado são conferidos separadamente. Arquivos repetidos não devem duplicar movimentações.</p>
@@ -2353,7 +2363,8 @@ document.addEventListener('wms-baseline-loaded',dailyLoad);
 
 // Fluxo central de atualizações. As funções de backend acima mantêm as validações e a trilha de auditoria.
 document.body.classList.add('wms-wizard-compact');
-let wmsBatchSelection={conect:new Map(),diario:null,nne:null,matriz:null,analitico:null,warnings:[]},wmsBatchBusy=false;
+let wmsBatchSelection={conect:new Map(),diario:null,nne:null,matriz:null,analitico:null,atlas_bot:null,baixados_bot:null,media_bot:null,warnings:[]},wmsBatchBusy=false;
+let wmsBotImportCandidate=null;
 function wmsBatchDate(filename){
  const m=String(filename).match(/(20\d{2})[-_ ]?([01]\d)[-_ ]?([0-3]\d)(?!\d)/);
  if(!m)return null;
@@ -2372,7 +2383,10 @@ function wmsBatchClassify(file){
  const ext=n.split('.').at(-1),conect=idOfFile(file.name);
  if(conect)return {group:'conect',kind:conect,ok:ext==='xlsx'};
  if(n.includes('inicializados matriz cgde'))return {group:'matriz',ok:ext==='xlsx'};
- if(n.includes('natlas_relatorio_posicao_equipamento')||n.includes('baixados assinantes'))return {group:'diario',ok:ext==='xlsx'};
+ if(n.includes('baixados assinantes'))return {group:'baixados_bot',ok:ext==='xlsx'};
+ if(n.includes('media seriais consumo diario'))return {group:'media_bot',ok:ext==='xlsx'};
+ if(n.includes('relatorio atlas')&&!n.includes('natlas_relatorio'))return {group:'atlas_bot',ok:ext==='xlsx'};
+ if(n.includes('natlas_relatorio_posicao_equipamento'))return {group:'diario',ok:ext==='xlsx'};
  if(n.startsWith('nne_')||n.startsWith('nne-'))return {group:'nne',ok:ext==='xlsx'};
  if(n.includes('relatorio_equipamentos_analitico')||n.includes('relatorio equipamentos analitico'))return {group:'analitico',ok:['xls','html','htm'].includes(ext)};
  return {group:'desconhecido',ok:false};
@@ -2415,7 +2429,7 @@ function wmsBatchRefresh(){
 }
 $('wmsBatchFiles').addEventListener('change',e=>{
  if(wmsBatchBusy)return;
- const files=Array.from(e.target.files||[]),sel={conect:new Map(),diario:null,nne:null,matriz:null,analitico:null,warnings:[]};
+ const files=Array.from(e.target.files||[]),sel={conect:new Map(),diario:null,nne:null,matriz:null,analitico:null,atlas_bot:null,baixados_bot:null,media_bot:null,warnings:[]};
  for(const file of files){
   const t=wmsBatchClassify(file);
   if(t.group==='desconhecido'){sel.warnings.push('Arquivo não reconhecido: '+file.name);continue}
@@ -2440,10 +2454,11 @@ $('wmsBatchFiles').addEventListener('change',e=>{
  if(sel.analitico)wmsBatchAssign('wmsAnaliticoFile',[sel.analitico]);
  else{wmsFontes.analitico=null;$('wmsAnaliticoFile').value='';wmsRenderAnalitico();}
  if(unique.length===1){$('conectReferencia').value=unique[0];$('dailyDate').value=unique[0];}
- if(sel.matriz)sel.warnings.push('INICIALIZADOS MATRIZ CGDE foi reconhecido como referência histórica, não como fotografia de instalação.');
+ if(sel.matriz&&!sel.atlas_bot)sel.warnings.push('Matriz reconhecida; selecione também Relatorio atlas e BAIXADOS para calcular a média pela regra do bot.');
  if(sel.analitico)sel.warnings.push('Atlas Analítico disponível na área avançada; não gera consumo.');
  if(sel.nne&&nneDate&&unique.length===1&&nneDate!==unique[0])sel.warnings.push('NNE tem data '+nneDate+' e será gravado apenas por confirmação independente.');
  wmsBatchRefresh();
+ void wmsBotPreviewFiles();
 });
 $('wmsBatchComplete').addEventListener('change',()=>{$('dailyComplete').checked=$('wmsBatchComplete').checked;dailyReady();wmsBatchRefresh()});
 $('wmsBatchDateInput').addEventListener('change',()=>{const d=$('wmsBatchDateInput').value;$('conectReferencia').value=d;$('dailyDate').value=d;wmsBatchRefresh()});
